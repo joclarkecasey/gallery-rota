@@ -1,0 +1,694 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Gallery Rota">
+<meta name="theme-color" content="#B6502F">
+<title>Gallery Rota</title>
+<style>
+  /* Layout: one phone-width column; each open day is a card with a row of hour chips */
+  :root {
+    --brand: #B6502F; --brand-soft: #F6E7E1; --bg: #FAF8F5; --card: #FFFFFF; --sunk: #F2EEEA;
+    --text: #2B2622; --muted: #6F665F; --line: #E6DFD8; --mine: #2F6B4F; --mine-soft: #E3F0E8;
+    --walk: #6E4A94; --note-bg: #FFF3C4; --note-fg: #5C4A00; --on-brand: #FFFFFF; --wk-bg: #EDE5DE;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --brand: #D06A47; --brand-soft: #4A2A20; --bg: #1C1917; --card: #272320; --sunk: #201D1A;
+      --text: #F2EEEA; --muted: #A69D95; --line: #3A3430; --mine: #7CC4A0; --mine-soft: #1F3A2E; --walk: #B58BDB;
+      --note-bg: #3D3416; --note-fg: #F2DE8F; --wk-bg: #2F2A26; color-scheme: dark; }
+  }
+  :root[data-theme="dark"] { --brand: #D06A47; --brand-soft: #4A2A20; --bg: #1C1917; --card: #272320; --sunk: #201D1A;
+      --text: #F2EEEA; --muted: #A69D95; --line: #3A3430; --mine: #7CC4A0; --mine-soft: #1F3A2E; --walk: #B58BDB;
+      --note-bg: #3D3416; --note-fg: #F2DE8F; --wk-bg: #2F2A26; color-scheme: dark; }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 16px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  header { background: var(--brand); color: var(--on-brand); padding: calc(14px + env(safe-area-inset-top, 0px)) 16px 14px; }
+  header h1 { margin: 0; font-size: 20px; }
+  header p { margin: 2px 0 0; font-size: 13px; opacity: .85; }
+  .note { background: var(--note-bg); color: var(--note-fg); font-size: 13px; padding: 8px 16px; text-align: center; }
+  main { max-width: 560px; margin: 0 auto; padding: 16px 16px 140px; }
+  label { display: block; font-weight: 600; margin: 16px 0 6px; }
+  input, select { width: 100%; padding: 12px; font-size: 16px; border: 1px solid var(--line);
+                  border-radius: 10px; background: var(--card); color: var(--text); }
+  button { font: inherit; border: 0; border-radius: 10px; padding: 12px 16px; cursor: pointer; }
+  button:focus-visible, a:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+  .primary { background: var(--brand); color: var(--on-brand); width: 100%; margin-top: 16px; font-weight: 600; }
+  .error { color: var(--brand); margin-top: 10px; }
+
+  .summary { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+  .summary strong { color: var(--brand); }
+  .howto { font-size: 14px; color: var(--muted); margin: 8px 2px 12px; }
+  .tabs { display: flex; gap: 6px; margin-bottom: 4px; }
+  .tabs button { flex: 1; background: var(--card); border: 1px solid var(--line); color: var(--text); padding: 9px; }
+  .tabs button.on { background: var(--brand); border-color: var(--brand); color: var(--on-brand); }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 20px 0 8px; }
+
+  .week.thisweek { background: var(--wk-bg); border-radius: 14px; padding: 2px 10px 1px; margin-top: 12px; }
+  .week.thisweek h2 { color: var(--brand); margin-top: 12px; }
+  .dnote { font-size: 13px; font-weight: 600; color: var(--walk); margin: -4px 0 8px; }
+  .pills { display: flex; gap: 6px; }
+  .pill.today { background: var(--brand); color: var(--on-brand); }
+  .day.closed .dname { color: var(--muted); }
+  .day { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin-bottom: 10px; }
+  .dayhead { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 8px; }
+  .dname { font-weight: 600; }
+  .pill { font-size: 12px; font-weight: 600; border-radius: 999px; padding: 2px 8px; white-space: nowrap; }
+  .pill.need { background: var(--brand-soft); color: var(--brand); }
+  .pill.ok { background: var(--sunk); color: var(--muted); }
+  .sub { font-size: 12px; font-weight: 700; color: var(--walk); letter-spacing: .04em; text-transform: uppercase; margin: 10px 0 6px; }
+  .hours { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
+  .chip { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 8px 2px; min-width: 0;
+          border-radius: 8px; border: 1px solid var(--line); background: var(--sunk); color: var(--text); font-size: 12px; line-height: 1.25; }
+  .chip .h { font-weight: 600; font-variant-numeric: tabular-nums; }
+  .chip .n { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+  .chip:disabled { cursor: default; }
+  .chip.open { background: var(--brand-soft); border-color: var(--brand); }
+  .chip.open .n { color: var(--brand); font-weight: 600; }
+  .chip.mine { background: var(--mine-soft); border-color: var(--mine); }
+  .chip.mine .n { color: var(--mine); font-weight: 600; }
+  .chip.open.sel { background: var(--brand); color: var(--on-brand); }
+  .chip.mine.sel { background: var(--mine); color: var(--bg); }
+  .chip.sel .n { color: inherit; }
+
+  .adminbar { background: var(--card); border: 1px dashed var(--walk); border-radius: 12px; padding: 12px 14px; margin-top: 12px; }
+  .adminbar strong { color: var(--walk); }
+  .adminbar p { margin: 0 0 8px; font-size: 14px; }
+  .addrow { display: flex; gap: 8px; }
+  .addrow input { flex: 1; min-width: 0; padding: 9px; }
+  .addrow button, .edit { background: var(--walk); color: var(--on-brand); font-weight: 600; padding: 9px 14px; }
+  .edit { padding: 3px 10px; font-size: 12px; border-radius: 999px; }
+  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.4); display: flex; align-items: flex-end; justify-content: center; }
+  .panel { background: var(--card); color: var(--text); width: 100%; max-width: 560px; max-height: 88%; overflow-y: auto;
+           border-radius: 16px 16px 0 0; padding: 18px 16px calc(18px + env(safe-area-inset-bottom, 0px)); }
+  .panel h3 { margin: 0; font-size: 18px; }
+  .panel .edsub { margin: 2px 0 12px; color: var(--muted); font-size: 14px; }
+  .panel fieldset { border: 1px solid var(--line); border-radius: 12px; margin: 0 0 12px; padding: 10px 12px; }
+  .panel legend { font-weight: 600; padding: 0 4px; }
+  .opt { display: flex; align-items: center; gap: 10px; padding: 6px 0; font-weight: 400; margin: 0; }
+  .opt input { width: auto; }
+  .times { display: flex; align-items: center; gap: 8px; margin: 4px 0 4px 28px; }
+  .times select { width: auto; flex: 1; padding: 8px; }
+  .panel label.lbl { margin: 4px 0 6px; }
+  .warn { background: var(--brand-soft); color: var(--brand); border-radius: 10px; padding: 10px 12px; font-size: 14px; }
+  .panel .btns { display: flex; gap: 8px; margin-top: 14px; }
+  .panel .btns button { flex: 1; }
+  .panel .cancel { background: var(--bg); color: var(--text); border: 1px solid var(--line); }
+  .panel .save { background: var(--walk); color: var(--on-brand); font-weight: 600; }
+  .empty { color: var(--muted); text-align: center; padding: 24px 0; }
+  footer { font-size: 14px; color: var(--muted); text-align: center; margin-top: 24px; }
+  footer a { color: var(--brand); }
+  .bar { position: fixed; left: 0; right: 0; bottom: 0; background: var(--card); border-top: 1px solid var(--line);
+         padding: 14px 16px calc(14px + env(safe-area-inset-bottom, 0px)); box-shadow: 0 -8px 24px rgba(0,0,0,.12); }
+  .bar p { margin: 0 auto 10px; max-width: 528px; font-weight: 600; }
+  .bar div { display: flex; gap: 8px; max-width: 528px; margin: 0 auto; }
+  .bar button { flex: 1; }
+  #barWhoRow { margin-bottom: 8px; }
+  #barWhoRow select { padding: 10px; }
+  .bar .go.admin { background: var(--walk); color: var(--on-brand); }
+  .bar .clear { background: var(--bg); color: var(--text); border: 1px solid var(--line); flex: 0 0 auto; }
+  .bar .go { background: var(--brand); color: var(--on-brand); font-weight: 600; }
+  .bar .go.release { background: var(--mine); color: var(--bg); }
+  .toast { position: fixed; left: 16px; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); max-width: 528px;
+           margin: 0 auto; background: var(--text); color: var(--bg); padding: 12px 14px; border-radius: 10px; text-align: center; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Gallery Rota</h1>
+  <p>CACM Gallery &amp; Boutique</p>
+</header>
+<div id="note" class="note" hidden></div>
+
+<main>
+  <section id="loginView" hidden>
+    <label for="passcode">Studio passcode</label>
+    <input id="passcode" type="password" autocomplete="current-password">
+    <button class="primary" id="loginBtn">Continue</button>
+    <p id="loginError" class="error"></p>
+  </section>
+
+  <section id="nameView" hidden>
+    <label for="nameSelect">Who are you?</label>
+    <select id="nameSelect"></select>
+    <button class="primary" id="nameBtn">Show the rota</button>
+  </section>
+
+  <section id="adminView" hidden>
+    <label for="adminPass">Admin passcode</label>
+    <input id="adminPass" type="password">
+    <button class="primary" id="adminBtn">Manage hours</button>
+    <p id="adminError" class="error"></p>
+    <p class="howto" id="adminHint"></p>
+    <p><a href="#" id="adminBack">Back to the rota</a></p>
+  </section>
+
+  <section id="mainView" hidden>
+    <div class="summary" id="summary"></div>
+    <div class="adminbar" id="adminbar" hidden>
+      <p><strong>Managing hours.</strong> Tap any hours to book them for someone (or remove a booking). Tap <em>Edit</em> on a day to change its hours, close it, or move the Art Walk. To open on a day that's normally closed, add it here:</p>
+      <div class="addrow"><input type="date" id="addDate" aria-label="Date to add"><button id="addBtn">Add day</button></div>
+    </div>
+    <p class="howto">Tap an open hour, then the hours next to it, to take a block. Tap your own hours to give them up.</p>
+    <div class="tabs">
+      <button data-f="all" class="on">All</button>
+      <button data-f="open">Open</button>
+      <button data-f="mine">Mine</button>
+    </div>
+    <div id="list"></div>
+    <footer>Signed in as <span id="me"></span> · <a href="#" id="changeName">change</a> · <a href="#" id="refresh">refresh</a><br><a href="#" id="adminLink">Manage hours</a></footer>
+  </section>
+
+  <p id="loading" class="empty">Loading…</p>
+</main>
+
+<div class="bar" id="bar" hidden>
+  <p id="barText"></p>
+  <div id="barWhoRow" hidden><select id="barWho" aria-label="Book for"></select></div>
+  <div><button class="clear" id="barClear">Clear</button><button class="clear" id="barRemove" hidden>Remove</button><button class="go" id="barGo">Take</button></div>
+</div>
+<div class="overlay" id="editor" hidden>
+  <div class="panel" role="dialog" aria-labelledby="edTitle">
+    <h3 id="edTitle"></h3>
+    <p class="edsub" id="edDefault"></p>
+    <fieldset>
+      <legend>Gallery</legend>
+      <label class="opt" id="optNormalRow"><input type="radio" name="mode" value="normal" id="modeNormal"> <span id="optNormalText">Normal hours</span></label>
+      <label class="opt"><input type="radio" name="mode" value="custom" id="modeCustom"> <span id="optCustomText">Different hours</span></label>
+      <div class="times" id="customTimes"><select id="hStart" aria-label="Opens"></select> to <select id="hEnd" aria-label="Closes"></select></div>
+      <label class="opt" id="optClosedRow"><input type="radio" name="mode" value="closed" id="modeClosed"> Closed all day</label>
+    </fieldset>
+    <fieldset id="walkSet">
+      <legend>Art Walk evening</legend>
+      <label class="opt"><input type="checkbox" id="walkOn"> Art Walk this evening</label>
+      <div class="times" id="walkTimes"><select id="wStart" aria-label="Art Walk starts"></select> to <select id="wEnd" aria-label="Art Walk ends"></select></div>
+    </fieldset>
+    <label class="lbl" for="edNote">Note for artists (optional)</label>
+    <input id="edNote" placeholder="e.g. Holiday hours, closed for install">
+    <p class="warn" id="edWarn" hidden></p>
+    <div class="btns"><button class="cancel" id="edCancel">Cancel</button><button class="save" id="edSave">Save</button></div>
+  </div>
+</div>
+<div id="toast" class="toast" hidden></div>
+
+<script>
+// ▼▼▼ Paste the Apps Script web app address between the quotes ▼▼▼
+const API_URL = 'https://script.google.com/macros/s/AKfycbzfHGhO4MVcwD_7wzLQdqlRuieKmI7UM94pW1PsWjqt401JYJIg4a4Fx-mCfglAb3fc/exec';
+// ▲▲▲  (Until then the page runs as a preview with example names.)
+
+const DEMO = !/^https:\/\//.test(API_URL);
+const $ = (id) => document.getElementById(id);
+const store = {
+  get(k) { try { return localStorage.getItem(k) || ''; } catch (e) { return ''; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} },
+  del(k) { try { localStorage.removeItem(k); } catch (e) {} }
+};
+const state = { passcode: store.get('rota_pass'), me: store.get('rota_name'), shifts: [], artists: [], filter: 'all', sel: [], busy: false, dayInfo: {}, admin: false, editing: null };
+
+/* ---------- helpers ---------- */
+const pad = (n) => String(n).padStart(2, '0');
+const iso = (d) => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+function esc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+function toDate(d) { const [y, m, day] = d.split('-').map(Number); return new Date(y, m - 1, day); }
+function fmtTime(t) { let [h, m] = t.split(':').map(Number); const ap = h >= 12 && h < 24 ? 'pm' : 'am'; h = h % 12 || 12; return h + (m ? ':' + pad(m) : '') + ap; }
+function fmtDay(d) { return toDate(d).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }); }
+function weekStart(d) { const x = toDate(d); x.setDate(x.getDate() - x.getDay()); return x; }
+const byTime = (a, b) => (a.date + a.start).localeCompare(b.date + b.start);
+const find = (id) => state.shifts.find((s) => s.id === id);
+function kindOf(s) { return !s.artist ? 'open' : s.artist === state.me ? 'mine' : 'taken'; }
+function firstName(n) { return n.toUpperCase() === 'CLOSED' ? 'Closed' : n.split(' ')[0]; }
+const hrs = (n) => n + ' hour' + (n === 1 ? '' : 's');
+
+function show(view) { ['loginView', 'nameView', 'adminView', 'mainView', 'loading'].forEach((v) => { $(v).hidden = v !== view; }); }
+function toast(msg) {
+  const t = $('toast'); t.textContent = msg; t.hidden = false;
+  clearTimeout(toast.timer); toast.timer = setTimeout(() => { t.hidden = true; }, 3500);
+}
+
+/* ---------- preview data (used only until API_URL is set) ---------- */
+const demo = DEMO ? (() => {
+  const artists = ['Alex Morgan', 'Bea Lindqvist', 'Carmen Ruiz', 'Dana Okafor', 'Eli Brandt', 'Fiona Walsh', 'Grace Tan',
+    'Hal Pierce', 'Ines Duarte', 'Jo (you)', 'Kim Albers', 'Lena Novak', 'Marta Silva', 'Noor Haddad', 'Owen Reyes',
+    'Pia Larsen', 'Quinn Avery', 'Rosa Mendel'];
+  let seed = 11; const rand = () => { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; };
+  // Example changes, as an admin would enter them
+  const special = {
+    '2026-10-09': { walk: null },
+    '2026-10-16': { walk: [17, 21], note: 'Art Walk moved from Oct 9' },
+    '2026-10-22': { closed: true, note: 'Closed for the gallery install' },
+    '2026-10-31': { hours: [11, 15], note: 'Halloween: closing at 3pm' }
+  };
+  const shifts = [];
+  const first = new Date(); first.setHours(12, 0, 0, 0);
+  const firstIso = iso(first);
+  const lastIso = (() => { const d = new Date(first); d.setDate(d.getDate() + 34); return iso(d); })();
+
+  function slotsFor(date) {
+    const plan = planFor(date, special), out = [];
+    if (!plan || plan.closed) return out;
+    const add = (r, type) => { if (r) for (let h = r[0]; h < r[1]; h++) out.push({ id: date + '_' + pad(h) + ':00', date, start: pad(h) + ':00', end: pad(h + 1) + ':00', type, artist: '' }); };
+    add(plan.hours, 'Gallery'); add(plan.walk, 'Art Walk');
+    return out;
+  }
+  // first fill with example bookings
+  for (let i = 0; i < 35; i++) {
+    const d = new Date(first); d.setDate(first.getDate() + i);
+    const slots = slotsFor(iso(d)), fillRate = i < 14 ? 0.8 : 0.4;
+    let k = 0;
+    while (k < slots.length) {
+      const len = 1 + Math.floor(rand() * 3);
+      const who = rand() < fillRate ? artists[Math.floor(rand() * artists.length)] : '';
+      for (let j = 0; j < len && k < slots.length; j++, k++) slots[k].artist = who;
+    }
+    shifts.push(...slots);
+  }
+  const t = shifts.find((s) => s.artist && s.artist !== 'Jo (you)');
+  if (t) shifts.filter((s) => s.date === t.date && s.artist === t.artist).forEach((s) => { s.artist = 'Jo (you)'; });
+
+  function setDay(date, sp) {
+    if (sp) special[date] = sp; else delete special[date];
+    const old = shifts.filter((s) => s.date === date);
+    const fresh = slotsFor(date);
+    fresh.forEach((f) => { const o = old.find((x) => x.id === f.id && x.type === f.type); if (o) f.artist = o.artist; });
+    for (let i = shifts.length - 1; i >= 0; i--) if (shifts[i].date === date) shifts.splice(i, 1);
+    shifts.push(...fresh);
+  }
+  function info() {
+    const out = {};
+    Object.keys(special).forEach((d) => { const sp = special[d]; if (sp.closed || sp.note) out[d] = { closed: !!sp.closed, note: sp.note || '' }; });
+    return out;
+  }
+  return { artists, shifts, special, setDay, info, firstIso, lastIso };
+})() : null;
+
+// The normal pattern: Thu–Sat 11–5, Art Walk 5–9 on the 2nd Friday
+function defaultsFor(date) {
+  const d = toDate(date), wd = d.getDay();
+  const p = state.pattern || { openDays: [4, 5, 6], hours: [11, 17], walk: [17, 21] };
+  const open = p.openDays.indexOf(wd) !== -1;
+  return { open, hours: p.hours || [11, 17], walk: open && wd === 5 && d.getDate() >= 8 && d.getDate() <= 14 ? p.walk : null };
+}
+function planFor(date, specials) {
+  const def = defaultsFor(date), sp = (specials || state.specials || {})[date] || {};
+  if (sp.closed) return { closed: true };
+  if (!sp.hours && !def.open && !sp.walk) return null;
+  return { hours: sp.hours || (def.open ? def.hours : null), walk: 'walk' in sp ? sp.walk : def.walk };
+}
+
+function demoApi(method, p) {
+  if (method === 'POST') {
+    if (p.action === 'checkAdmin') return { ok: true };
+    if (p.action === 'adminBook') p.shiftIds.forEach((id) => { const s = demo.shifts.find((x) => x.id === id); if (s) s.artist = p.artist; });
+    if (p.action === 'setDay') { demo.setDay(p.date, p.special); }
+    else if (p.action !== 'adminBook') {
+      const chosen = p.shiftIds.map((id) => demo.shifts.find((s) => s.id === id));
+      if (p.action === 'claim') {
+        if (chosen.some((c) => c.artist && c.artist !== p.artist)) return { ok: false, error: 'Sorry, someone just took one of those hours.' };
+        chosen.forEach((c) => { c.artist = p.artist; });
+      } else chosen.forEach((c) => { if (c.artist === p.artist) c.artist = ''; });
+    }
+  }
+  return { ok: true, artists: demo.artists.slice(), shifts: demo.shifts.map((s) => Object.assign({}, s)), days: demo.info(),
+           specials: JSON.parse(JSON.stringify(demo.special)), demo: true };
+}
+
+/* ---------- talking to the sheet ---------- */
+async function api(method, payload) {
+  if (DEMO) return demoApi(method, payload);
+  let res;
+  if (method === 'GET') {
+    res = await fetch(API_URL + '?passcode=' + encodeURIComponent(state.passcode));
+  } else {
+    // Sent as plain text so the browser talks straight to Google without an extra check
+    res = await fetch(API_URL, { method: 'POST', body: JSON.stringify(Object.assign({ passcode: state.passcode }, payload)) });
+  }
+  return res.json();
+}
+
+function apply(data) {
+  state.shifts = (data.shifts || []).sort(byTime);
+  state.artists = data.artists || [];
+  state.dayInfo = data.days || {};
+  state.specials = data.specials || {};
+  if (data.pattern) state.pattern = data.pattern;
+  const note = $('note');
+  if (data.demo) { note.textContent = 'Preview with example names. Not connected to the sheet or calendar yet.'; note.hidden = false; }
+  else if (data.testMode) { note.textContent = 'Test mode: emails go to the tester only.'; note.hidden = false; }
+  else note.hidden = true;
+}
+
+async function load() {
+  if (DEMO) { state.passcode = 'demo'; if (!state.me) state.me = 'Jo (you)'; }
+  if (!state.passcode) return show('loginView');
+  show('loading');
+  try {
+    const data = await api('GET');
+    if (!data.ok) {
+      if (data.error === 'passcode') {
+        store.del('rota_pass'); state.passcode = '';
+        $('loginError').textContent = 'That passcode didn\'t work. Check it and try again.';
+        return show('loginView');
+      }
+      throw new Error(data.error);
+    }
+    apply(data);
+    if (!state.me || state.artists.indexOf(state.me) === -1) return askName();
+    state.sel = state.sel.filter((id) => find(id));
+    render();
+  } catch (e) {
+    $('loading').textContent = 'Couldn\'t load the rota. Check your connection and tap refresh. (' + e.message + ')';
+    show('loading');
+  }
+}
+
+function askName() {
+  $('nameSelect').innerHTML = '<option value="">Choose your name</option>' +
+    state.artists.map((n) => '<option' + (n === state.me ? ' selected' : '') + '>' + esc(n) + '</option>').join('');
+  state.sel = []; updateBar();
+  show('nameView');
+}
+
+/* ---------- drawing the rota ---------- */
+function render() {
+  $('me').textContent = state.me;
+  $('adminbar').hidden = !state.admin;
+  $('adminLink').textContent = state.admin ? 'Stop managing hours' : 'Manage hours';
+  const now = new Date();
+  const soonOpen = state.shifts.filter((s) => !s.artist && (toDate(s.date) - now) / 86400000 < 14).length;
+  const allOpen = state.shifts.filter((s) => !s.artist && (toDate(s.date) - now) / 86400000 < 28).length;
+  const mine = state.shifts.filter((s) => s.artist === state.me).length;
+  $('summary').innerHTML = (soonOpen
+    ? '<strong>' + hrs(soonOpen) + ' open</strong> in the next two weeks'
+    : allOpen ? 'The next two weeks are covered. <strong>' + hrs(allOpen) + ' open</strong> later on' : 'Every hour is covered')
+    + '. You have ' + hrs(mine) + ' coming up.';
+
+  const days = {};
+  state.shifts.forEach((s) => { (days[s.date] = days[s.date] || []).push(s); });
+  const todayIso = iso(now);
+  Object.keys(state.dayInfo).forEach((d) => { if (state.dayInfo[d].closed && d >= todayIso && !days[d]) days[d] = []; });
+  if (state.admin) Object.keys(state.specials || {}).forEach((d) => { if (d >= todayIso && !days[d]) days[d] = []; });
+  // Show this week and the three after it (weeks run Sunday to Saturday)
+  const until = weekStart(todayIso); until.setDate(until.getDate() + 28);
+  const lastDay = iso(until);
+  const dates = Object.keys(days).sort().filter((d) => d < lastDay).filter((d) =>
+    (state.filter === 'all') ||
+    (state.filter === 'open' && days[d].some((s) => !s.artist)) ||
+    (state.filter === 'mine' && days[d].some((s) => s.artist === state.me)));
+
+  if (!dates.length) {
+    $('list').innerHTML = '<p class="empty">' + (state.filter === 'mine' ? 'You haven\'t taken any hours yet.' : state.filter === 'open' ? 'Every hour is covered.' : 'No hours set up yet.') + '</p>';
+    updateBar(); return show('mainView');
+  }
+
+  const chip = (s) => {
+    const k = kindOf(s);
+    const sel = state.sel.indexOf(s.id) !== -1;
+    const name = k === 'open' ? 'Open' : k === 'mine' ? 'You' : firstName(s.artist);
+    const hour = fmtTime(s.start).replace(':00', '');
+    return '<button class="chip ' + k + (sel ? ' sel' : '') + '" data-id="' + esc(s.id) + '"' +
+      (k === 'taken' && !state.admin ? ' disabled' : ' aria-pressed="' + sel + '"') +
+      ' aria-label="' + esc(fmtDay(s.date) + ' ' + fmtTime(s.start) + ' to ' + fmtTime(s.end) + ': ' + (k === 'taken' ? s.artist : name)) + '">' +
+      '<span class="h">' + hour + '</span><span class="n">' + esc(name) + '</span></button>';
+  };
+
+  const thisWeek = weekStart(todayIso).toDateString();
+  const nw = weekStart(todayIso); nw.setDate(nw.getDate() + 7);
+  const nextWeek = nw.toDateString();
+  let html = '', lastWeek = '';
+  dates.forEach((d) => {
+    const wk = weekStart(d).toDateString();
+    if (wk !== lastWeek) {
+      if (lastWeek) html += '</div>';
+      const ws = weekStart(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const title = wk === thisWeek ? 'This week' : wk === nextWeek ? 'Next week · ' + ws : 'Week of ' + ws;
+      html += '<div class="week' + (wk === thisWeek ? ' thisweek' : '') + '"><h2>' + title + '</h2>';
+      lastWeek = wk;
+    }
+    const rows = days[d];
+    const info = state.dayInfo[d] || {};
+    const today = (d === todayIso ? '<span class="pill today">Today</span>' : '') +
+      (state.admin ? '<button class="edit" data-edit="' + d + '">Edit</button>' : '');
+    if (!rows.length) {
+      html += '<section class="day closed"><div class="dayhead"><span class="dname">' + fmtDay(d) + '</span><span class="pills">' + today +
+        '<span class="pill ok">Closed</span></span></div><div class="dnote" style="margin:0">' + esc(info.note || 'Gallery closed') + '</div></section>';
+      return;
+    }
+    const open = rows.filter((s) => !s.artist).length;
+    const gallery = rows.filter((s) => s.type !== 'Art Walk');
+    const walk = rows.filter((s) => s.type === 'Art Walk');
+    html += '<section class="day"><div class="dayhead"><span class="dname">' + fmtDay(d) + '</span><span class="pills">' + today +
+      (open ? '<span class="pill need">' + hrs(open) + ' open</span>' : '<span class="pill ok">Covered</span>') + '</span></div>' +
+      (info.note ? '<div class="dnote">' + esc(info.note) + '</div>' : '') +
+      '<div class="hours">' + gallery.map(chip).join('') + '</div>' +
+      (walk.length ? '<div class="sub">Art Walk ' + fmtTime(walk[0].start) + '–' + fmtTime(walk[walk.length - 1].end) + '</div><div class="hours">' + walk.map(chip).join('') + '</div>' : '') +
+      '</section>';
+  });
+  $('list').innerHTML = html + '</div>';
+  updateBar();
+  show('mainView');
+}
+
+/* ---------- picking hours ---------- */
+function tap(id) {
+  const s = find(id); if (!s) return;
+  const kindFn = (x) => state.admin ? 'any' : kindOf(x);
+  const k = kindFn(s); if (k === 'taken') return;
+  const sel = state.sel.map(find).filter(Boolean).sort(byTime);
+  const sameRun = sel.length && sel[0].date === s.date && kindFn(sel[0]) === k;
+
+  if (!sameRun) state.sel = [id];
+  else if (state.sel.indexOf(id) !== -1) {
+    if (id === sel[0].id) state.sel = sel.slice(1).map((x) => x.id);
+    else if (id === sel[sel.length - 1].id) state.sel = sel.slice(0, -1).map((x) => x.id);
+    else state.sel = [id];
+  } else {
+    // stretch the block to the tapped hour, if every hour in between is the same kind
+    const lo = s.start < sel[0].start ? s.start : sel[0].start;
+    const hi = s.end > sel[sel.length - 1].end ? s.end : sel[sel.length - 1].end;
+    const span = state.shifts.filter((x) => x.date === s.date && x.start >= lo && x.end <= hi).sort(byTime);
+    const joined = span.every((x, i) => kindFn(x) === k && (i === 0 || x.start === span[i - 1].end));
+    state.sel = joined ? span.map((x) => x.id) : [id];
+  }
+  render();
+}
+
+function updateBar() {
+  const sel = state.sel.map(find).filter(Boolean).sort(byTime);
+  if (!sel.length) { $('bar').hidden = true; return; }
+  const go = $('barGo');
+  if (state.admin) {
+    const range = fmtDay(sel[0].date) + ', ' + fmtTime(sel[0].start) + '–' + fmtTime(sel[sel.length - 1].end);
+    $('barText').textContent = 'Book ' + range + ' (' + hrs(sel.length) + ') for:';
+    const who = $('barWho'), keep = who.value;
+    who.innerHTML = '<option value="">Choose a name</option>' + state.artists.map((n) => '<option>' + esc(n) + '</option>').join('');
+    who.value = state.artists.indexOf(keep) !== -1 ? keep : (sel.every((x) => x.artist && x.artist === sel[0].artist) ? sel[0].artist : '');
+    $('barWhoRow').hidden = false;
+    $('barRemove').hidden = !sel.some((x) => x.artist);
+    go.textContent = state.busy ? 'Saving…' : 'Book';
+    go.classList.remove('release'); go.classList.add('admin');
+    go.disabled = state.busy;
+    $('bar').hidden = false;
+    return;
+  }
+  $('barWhoRow').hidden = true; $('barRemove').hidden = true; go.classList.remove('admin');
+  const releasing = kindOf(sel[0]) === 'mine';
+  const range = fmtDay(sel[0].date) + ', ' + fmtTime(sel[0].start) + '–' + fmtTime(sel[sel.length - 1].end);
+  $('barText').textContent = (releasing ? 'Give up ' : 'Take ') + range + ' (' + hrs(sel.length) + ')';
+  go.textContent = state.busy ? 'Saving…' : releasing ? 'Give up' : 'Take ' + (sel.length === 1 ? 'it' : 'them');
+  go.classList.toggle('release', releasing);
+  go.disabled = state.busy;
+  $('bar').hidden = false;
+}
+
+async function adminBook(artist) {
+  const sel = state.sel.map(find).filter(Boolean).sort(byTime);
+  if (!sel.length || state.busy) return;
+  if (artist === null) { artist = $('barWho').value; if (!artist) { toast('Choose a name first.'); return; } }
+  state.busy = true; updateBar();
+  try {
+    const data = await api('POST', { action: 'adminBook', shiftIds: sel.map((s) => s.id), artist, admin: state.adminPass });
+    state.busy = false;
+    if (!data.ok) { toast(data.error); return; }
+    apply(data); state.sel = []; render();
+    toast(artist ? 'Booked for ' + artist + '. It\'s on the calendar.' : 'Booking removed. Those hours are open.');
+  } catch (e) {
+    state.busy = false; toast('Something went wrong. Please try again.'); updateBar();
+  }
+}
+
+async function submit() {
+  if (state.admin) return adminBook(null);
+  const sel = state.sel.map(find).filter(Boolean).sort(byTime);
+  if (!sel.length || state.busy) return;
+  const action = kindOf(sel[0]) === 'mine' ? 'release' : 'claim';
+  state.busy = true; updateBar();
+  try {
+    const data = await api('POST', { action, shiftIds: sel.map((s) => s.id), artist: state.me });
+    state.busy = false;
+    if (!data.ok) { toast(data.error); state.sel = []; return load(); }
+    apply(data); state.sel = []; render();
+    toast(action === 'claim' ? 'Thanks! Your hours are on the calendar.' : 'Done. Those hours are open again.');
+  } catch (e) {
+    state.busy = false; toast('Something went wrong. Please try again.'); updateBar();
+  }
+}
+
+/* ---------- managing hours (admin) ---------- */
+function hourOptions(sel, from, to, chosen) {
+  let o = '';
+  for (let h = from; h <= to; h++) o += '<option value="' + h + '"' + (h === chosen ? ' selected' : '') + '>' + fmtTime(pad(h) + ':00') + '</option>';
+  sel.innerHTML = o;
+}
+function rangeText(r) { return fmtTime(pad(r[0]) + ':00') + '–' + fmtTime(pad(r[1]) + ':00'); }
+
+function openEditor(date) {
+  const def = defaultsFor(date), sp = state.specials[date] || {};
+  state.editing = date;
+  $('edTitle').textContent = toDate(date).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+  $('edDefault').textContent = def.open
+    ? 'Normally open ' + rangeText(def.hours) + (def.walk ? ', plus Art Walk ' + rangeText(def.walk) : '') + '.'
+    : 'Normally closed.';
+  $('optNormalRow').hidden = !def.open;
+  $('optCustomText').textContent = def.open ? 'Different hours' : 'Open these hours';
+  $('optClosedRow').querySelector('input').nextSibling.textContent = def.open ? ' Closed all day' : ' Closed (as normal)';
+  $('optNormalText').textContent = 'Normal hours (' + rangeText(def.hours) + ')';
+  const mode = sp.closed ? 'closed' : sp.hours ? 'custom' : def.open ? 'normal' : 'closed';
+  document.querySelector('input[name="mode"][value="' + mode + '"]').checked = true;
+  const hrsR = sp.hours || def.hours;
+  hourOptions($('hStart'), 7, 20, hrsR[0]); hourOptions($('hEnd'), 8, 22, hrsR[1]);
+  const walk = 'walk' in sp ? sp.walk : def.walk;
+  $('walkOn').checked = !!walk;
+  const w = walk || [17, 21];
+  hourOptions($('wStart'), 15, 21, w[0]); hourOptions($('wEnd'), 16, 23, w[1]);
+  $('edNote').value = sp.note || '';
+  syncEditor();
+  $('editor').hidden = false;
+}
+
+function readEditor() {
+  const date = state.editing, def = defaultsFor(date);
+  const mode = document.querySelector('input[name="mode"]:checked').value;
+  const sp = {};
+  if (mode === 'closed') { if (def.open) sp.closed = true; }
+  else if (mode === 'custom') sp.hours = [+$('hStart').value, +$('hEnd').value];
+  if (mode !== 'closed') {
+    const walk = $('walkOn').checked ? [+$('wStart').value, +$('wEnd').value] : null;
+    if (JSON.stringify(walk) !== JSON.stringify(def.walk)) sp.walk = walk;
+  }
+  const note = $('edNote').value.trim();
+  if (note) sp.note = note;
+  return Object.keys(sp).length ? sp : null;
+}
+
+function syncEditor() {
+  const mode = document.querySelector('input[name="mode"]:checked').value;
+  $('customTimes').hidden = mode !== 'custom';
+  $('walkSet').hidden = mode === 'closed';
+  $('walkTimes').hidden = !$('walkOn').checked;
+  const bad = (mode === 'custom' && +$('hEnd').value <= +$('hStart').value) ||
+              ($('walkOn').checked && mode !== 'closed' && +$('wEnd').value <= +$('wStart').value);
+  // which bookings would be lost?
+  const sp = readEditor(), date = state.editing;
+  const keep = new Set();
+  const def = defaultsFor(date), p = sp || {};
+  if (!p.closed && !(mode === 'closed')) {
+    const hoursR = p.hours || (def.open ? def.hours : null);
+    const walkR = 'walk' in p ? p.walk : def.walk;
+    if (hoursR) for (let h = hoursR[0]; h < hoursR[1]; h++) keep.add('Gallery' + h);
+    if (walkR) for (let h = walkR[0]; h < walkR[1]; h++) keep.add('Art Walk' + h);
+  }
+  const lost = state.shifts.filter((s) => s.date === date && s.artist && !keep.has(s.type + parseInt(s.start, 10)));
+  const who = {};
+  lost.forEach((s) => { (who[s.artist] = who[s.artist] || []).push(fmtTime(s.start)); });
+  const names = Object.keys(who);
+  const warn = $('edWarn');
+  if (bad) { warn.textContent = 'The closing time needs to be after the opening time.'; warn.hidden = false; }
+  else if (names.length) {
+    warn.textContent = 'This removes hours already booked by ' + names.map((n) => n + ' (' + who[n].join(', ') + ')').join(', ') +
+      '. They\'ll get an email saying the hours have changed.';
+    warn.hidden = false;
+  } else warn.hidden = true;
+  $('edSave').disabled = bad;
+}
+
+async function saveDay() {
+  const date = state.editing, sp = readEditor();
+  $('edSave').disabled = true; $('edSave').textContent = 'Saving…';
+  try {
+    const data = await api('POST', { action: 'setDay', date, special: sp, admin: state.adminPass });
+    if (!data.ok) { toast(data.error); return; }
+    apply(data); $('editor').hidden = true; state.sel = []; render();
+    toast(sp ? 'Saved. Artists see the new hours now.' : 'Saved. Back to normal hours.');
+  } catch (e) {
+    toast('Couldn\'t save. Please try again.');
+  } finally {
+    $('edSave').textContent = 'Save'; $('edSave').disabled = false;
+  }
+}
+
+/* ---------- buttons ---------- */
+$('loginBtn').onclick = () => {
+  state.passcode = $('passcode').value.trim();
+  if (!state.passcode) return;
+  store.set('rota_pass', state.passcode); $('loginError').textContent = ''; load();
+};
+$('passcode').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('loginBtn').click(); });
+$('nameBtn').onclick = () => {
+  const n = $('nameSelect').value; if (!n) return;
+  state.me = n; store.set('rota_name', n); render();
+};
+$('changeName').onclick = (e) => { e.preventDefault(); askName(); };
+$('refresh').onclick = (e) => { e.preventDefault(); state.sel = []; load(); };
+document.querySelector('.tabs').onclick = (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  state.filter = b.dataset.f;
+  document.querySelectorAll('.tabs button').forEach((x) => x.classList.toggle('on', x === b));
+  render();
+};
+$('list').onclick = (e) => { const b = e.target.closest('button.chip'); if (b && !b.disabled) tap(b.dataset.id); };
+$('barClear').onclick = () => { state.sel = []; render(); };
+$('barGo').onclick = submit;
+$('barRemove').onclick = () => adminBook('');
+$('adminLink').onclick = (e) => {
+  e.preventDefault();
+  if (state.admin) { state.admin = false; state.sel = []; render(); return; }
+  $('adminHint').textContent = DEMO ? 'In this preview any passcode works.' : 'Ask Nadia for the admin passcode.';
+  $('adminError').textContent = ''; show('adminView');
+};
+$('adminBack').onclick = (e) => { e.preventDefault(); render(); };
+$('adminBtn').onclick = async () => {
+  const pw = $('adminPass').value.trim();
+  if (!pw) { $('adminError').textContent = 'Enter the admin passcode.'; return; }
+  $('adminBtn').disabled = true; $('adminError').textContent = '';
+  try {
+    const data = await api('POST', { action: 'checkAdmin', admin: pw });
+    if (!data.ok) { $('adminError').textContent = data.error; return; }
+    state.adminPass = pw; state.admin = true; state.sel = []; render();
+  } catch (e) {
+    $('adminError').textContent = 'Couldn\'t check the passcode. Check your connection and try again.';
+  } finally {
+    $('adminBtn').disabled = false;
+  }
+};
+$('adminPass').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('adminBtn').click(); });
+$('list').addEventListener('click', (e) => { const b = e.target.closest('button[data-edit]'); if (b) openEditor(b.dataset.edit); });
+$('addBtn').onclick = () => {
+  const d = $('addDate').value;
+  if (!d) { toast('Pick a date first.'); return; }
+  if (d < iso(new Date())) { toast('Pick today or a later date.'); return; }
+  openEditor(d);
+};
+document.querySelectorAll('input[name="mode"]').forEach((r) => { r.onchange = syncEditor; });
+['hStart', 'hEnd', 'wStart', 'wEnd', 'walkOn'].forEach((id) => { $(id).onchange = syncEditor; });
+$('edCancel').onclick = () => { $('editor').hidden = true; };
+$('editor').addEventListener('click', (e) => { if (e.target.id === 'editor') $('editor').hidden = true; });
+$('edSave').onclick = saveDay;
+document.addEventListener('visibilitychange', () => { if (!document.hidden && !DEMO && state.passcode && state.me && !state.sel.length) load(); });
+
+load();
+</script>
+</body>
+</html>
