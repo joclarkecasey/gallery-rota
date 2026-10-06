@@ -35,6 +35,11 @@
   .who-chip #whoName { font-weight: 700; font-size: 15px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .who-lbl, .who-chg { font-size: 11px; opacity: .85; }
   .who-chg { text-decoration: underline; }
+  .hright { display: flex; align-items: center; gap: 8px; min-width: 0; max-width: 62%; }
+  .hright .who-chip { max-width: none; flex: 1; min-width: 0; }
+  .admin-chip { background: transparent; color: var(--on-brand); border: 1px solid rgba(255,255,255,.4); border-radius: 10px;
+                padding: 8px 10px; font-size: 13px; font-weight: 600; white-space: nowrap; }
+  .admin-chip.on { background: var(--on-brand); color: var(--brand); border-color: var(--on-brand); }
   .note { background: var(--note-bg); color: var(--note-fg); font-size: 13px; padding: 8px 16px; text-align: center; }
   main { max-width: 560px; margin: 0 auto; padding: 16px 16px 140px; }
   label { display: block; font-weight: 600; margin: 16px 0 6px; }
@@ -79,6 +84,18 @@
   .chip.room { background: var(--card); border: 1px dashed var(--walk); }
   .chip.room .n { color: var(--walk); font-weight: 600; }
   .chip.room.sel { background: var(--walk); color: var(--on-brand); }
+  .chip.wide { grid-column: span 3; }
+  .evlist { display: grid; gap: 6px; margin-bottom: 8px; }
+  .evrow { display: flex; align-items: center; gap: 8px; background: var(--sunk); border-radius: 8px; padding: 8px 10px; font-size: 14px; }
+  .evrow span { flex: 1; min-width: 0; }
+  .evrow b { color: var(--walk); }
+  .evrow button + button { margin-left: -2px; }
+  .evrow button { background: transparent; color: var(--brand); border: 1px solid var(--line); padding: 4px 10px; font-size: 13px; }
+  .evadd { background: transparent; color: var(--walk); border: 1px dashed var(--walk); width: 100%; padding: 9px; font-weight: 600; }
+  .evform { display: grid; gap: 8px; margin-top: 8px; }
+  .evform .times { margin: 0; flex-wrap: wrap; }
+  .evform .opt { padding: 2px 0; }
+  .pill.shut { background: var(--sunk); color: var(--muted); }
   .walklist { margin: 8px 2px 0; font-size: 13px; color: var(--muted); display: grid; gap: 2px; }
   .walklist b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
   .chip.open.sel { background: var(--brand); color: var(--on-brand); }
@@ -136,7 +153,10 @@
 <header>
   <div class="htop">
     <div><h1>Gallery Rota</h1><p>CACM Gallery &amp; Boutique</p></div>
-    <button class="who-chip" id="whoChip" hidden aria-label="Change who you are"><span class="who-lbl">You are</span><span id="whoName"></span><span class="who-chg">Not you? Change</span></button>
+    <div class="hright">
+      <button class="admin-chip" id="adminTop" hidden>Admin</button>
+      <button class="who-chip" id="whoChip" hidden aria-label="Change who is signed in"><span class="who-lbl">Signed in as</span><span id="whoName"></span><span class="who-chg">Change</span></button>
+    </div>
   </div>
 </header>
 <div id="note" class="note" hidden></div>
@@ -158,7 +178,7 @@
   <section id="adminView" hidden>
     <label for="adminPass">Admin passcode</label>
     <input id="adminPass" type="password">
-    <button class="primary" id="adminBtn">Manage hours</button>
+    <button class="primary" id="adminBtn">Open admin</button>
     <p id="adminError" class="error"></p>
     <p class="howto" id="adminHint"></p>
     <p><a href="#" id="adminBack">Back to the rota</a></p>
@@ -167,7 +187,7 @@
   <section id="mainView" hidden>
     <div class="summary" id="summary"></div>
     <div class="adminbar" id="adminbar" hidden>
-      <p><strong>Managing hours.</strong> Tap any hours to book them for someone (or remove a booking). Tap <em>Edit</em> on a day to change its hours, close it, or move the Art Walk. To open on a day that's normally closed, add it here:</p>
+      <p><strong>Admin.</strong> Tap any hours to book them for someone (or remove a booking). Tap <em>Edit</em> on a day to change its hours, close it, or add an event (installation, take down, opening reception, Art Walk). To open on a day that's normally closed, add it here:</p>
       <div class="addrow"><input type="date" id="addDate" aria-label="Date to add"><button id="addBtn">Add day</button></div>
     </div>
     <p class="howto">Tap an open hour, then the hours next to it, to take a block. Tap your own hours to give them up.</p>
@@ -177,7 +197,7 @@
       <button data-f="mine">Mine</button>
     </div>
     <div id="list"></div>
-    <footer>Signed in as <span id="me"></span> · <a href="#" id="changeName">change</a> · <a href="#" id="refresh">refresh</a><br><a href="#" id="adminLink">Manage hours</a></footer>
+    <footer><span id="me" hidden></span><a href="#" id="changeName" hidden>change</a><a href="#" id="refresh">Refresh</a></footer>
   </section>
 
   <p id="loading" class="empty">Loading…</p>
@@ -200,10 +220,21 @@
       <div class="times" id="customTimes"><select id="hStart" aria-label="Opens"></select> to <select id="hEnd" aria-label="Closes"></select></div>
       <label class="opt" id="optClosedRow"><input type="radio" name="mode" value="closed" id="modeClosed"> Closed all day</label>
     </fieldset>
-    <fieldset id="walkSet">
-      <legend>Art Walk evening</legend>
-      <label class="opt"><input type="checkbox" id="walkOn"> Art Walk this evening</label>
-      <div class="times" id="walkTimes"><select id="wStart" aria-label="Art Walk starts"></select> to <select id="wEnd" aria-label="Art Walk ends"></select></div>
+    <fieldset id="evSet">
+      <legend>Events</legend>
+      <div id="evList" class="evlist"></div>
+      <button type="button" class="evadd" id="evAddBtn">+ Add an event</button>
+      <div id="evForm" class="evform" hidden>
+        <select id="evType" aria-label="Event">
+          <option>Installation</option><option>Take down</option><option>Opening reception</option><option>Art Walk</option><option value="other">Other…</option>
+        </select>
+        <input id="evName" placeholder="Event name" maxlength="40" hidden>
+        <div class="times"><select id="evStart" aria-label="Starts"></select> to <select id="evEnd" aria-label="Ends"></select></div>
+        <div class="times">People needed <select id="evNeeded" aria-label="People needed"></select> up to <select id="evMax" aria-label="Most people"></select></div>
+        <label class="opt"><input type="radio" name="evMode" value="block" checked> People sign up for the whole event</label>
+        <label class="opt"><input type="radio" name="evMode" value="hour"> People sign up by the hour</label>
+        <div class="btns" style="margin-top:4px"><button type="button" class="cancel" id="evCancel">Cancel</button><button type="button" class="save" id="evOk">Add event</button></div>
+      </div>
     </fieldset>
     <label class="lbl" for="edNote">Note for artists (optional)</label>
     <input id="edNote" placeholder="e.g. Holiday hours, closed for install">
@@ -236,31 +267,36 @@ function fmtTime(t) { let [h, m] = t.split(':').map(Number); const ap = h >= 12 
 function fmtDay(d) { return toDate(d).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }); }
 function weekStart(d) { const x = toDate(d); x.setDate(x.getDate() - x.getDay()); return x; }
 const byTime = (a, b) => (a.date + a.start).localeCompare(b.date + b.start);
-const find = (id) => state.shifts.find((s) => s.id === id) || (state.walkHours || []).find((s) => s.id === id);
+const GALLERY = 'Gallery';
 const WALK = 'Art Walk';
-const isWalk = (s) => s.type === WALK;
-// Art Walk hours hold several people: 'mine', 'open' (still short), 'room' (enough, space for more) or 'taken' (full)
+const isGroup = (s) => s.type !== GALLERY;   // Art Walk and other events: several people at once
+const isWalk = isGroup;
+const find = (id) => state.shifts.find((s) => s.id === id) || (state.units || []).find((s) => s.id === id);
+// Event slots: 'mine', 'open' (still short), 'room' (enough, space for more) or 'taken' (full)
 function kindOf(s) {
   if (s.virtual) {
     if (s.names.indexOf(state.me) !== -1) return 'mine';
-    if (s.names.length < state.walkNeeded) return 'open';
+    if (s.names.length < s.needed) return 'open';
     return s.names.length < s.seats.length ? 'room' : 'taken';
   }
   return !s.artist ? 'open' : s.artist === state.me ? 'mine' : 'taken';
 }
-function buildWalkHours() {
+// Groups event rows into slots people join: one per hour, or one for the whole event.
+function buildUnits() {
   const by = {};
-  state.shifts.filter(isWalk).forEach((r) => {
-    const k = r.date + '|' + r.start;
-    (by[k] = by[k] || { id: 'W|' + k, date: r.date, start: r.start, end: r.end, type: WALK, virtual: true, seats: [], names: [] }).seats.push(r);
+  state.shifts.filter(isGroup).forEach((r) => {
+    const k = r.date + '|' + r.type + '|' + r.start;
+    (by[k] = by[k] || { id: 'G|' + k, date: r.date, type: r.type, start: r.start, end: r.end, virtual: true, seats: [], names: [] }).seats.push(r);
   });
-  state.walkHours = Object.keys(by).sort().map((k) => {
-    const w = by[k];
-    w.names = w.seats.filter((r) => r.artist && r.artist.toUpperCase() !== 'CLOSED').map((r) => r.artist);
-    return w;
-  });
+  state.units = Object.keys(by).sort().map((k) => {
+    const u = by[k];
+    const meta = eventMeta(u.date, u.type);
+    u.needed = meta.needed; u.mode = meta.mode;
+    u.names = u.seats.filter((r) => r.artist && r.artist.toUpperCase() !== 'CLOSED').map((r) => r.artist);
+    return u;
+  }).sort(byTime);
 }
-const walkShort = (w) => Math.max(0, state.walkNeeded - w.names.length);
+const walkShort = (u) => Math.max(0, u.needed - u.names.length);
 function firstName(n) { return n.toUpperCase() === 'CLOSED' ? 'Closed' : n.split(' ')[0]; }
 const hrs = (n) => n + ' hour' + (n === 1 ? '' : 's');
 
@@ -278,8 +314,12 @@ const demo = DEMO ? (() => {
   let seed = 11; const rand = () => { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; };
   // Example changes, as an admin would enter them
   const special = {
-    '2026-10-22': { closed: true, note: 'Closed for the gallery install' },
-    '2026-10-31': { hours: [11, 15], note: 'Halloween: closing at 3pm' }
+    '2026-10-22': { closed: true, note: 'Gallery closed for the install',
+                    events: [{ name: 'Installation', start: 10, end: 14, needed: 3, max: 4, mode: 'block' }] },
+    '2026-10-24': { note: 'Opening reception for the new show',
+                    events: [{ name: 'Opening reception', start: 17, end: 20, needed: 4, max: 6, mode: 'block' }] },
+    '2026-10-31': { hours: [11, 15], note: 'Halloween: closing at 3pm' },
+    '2026-11-18': { events: [{ name: 'Take down', start: 10, end: 13, needed: 2, max: 3, mode: 'block' }] }
   };
   const shifts = [];
   const first = new Date(); first.setHours(12, 0, 0, 0);
@@ -288,18 +328,24 @@ const demo = DEMO ? (() => {
 
   function slotsFor(date) {
     const plan = planFor(date, special), out = [];
-    if (!plan || plan.closed) return out;
-    const add = (r, type) => { if (r) for (let h = r[0]; h < r[1]; h++) out.push({ id: date + '_' + pad(h) + ':00', date, start: pad(h) + ':00', end: pad(h + 1) + ':00', type, artist: '' }); };
-    add(plan.hours, 'Gallery');
-    if (plan.walk) for (let h = plan.walk[0]; h < plan.walk[1]; h++) for (let n = 1; n <= 4; n++)
-      out.push({ id: date + '_' + pad(h) + ':00_w' + n, date, start: pad(h) + ':00', end: pad(h + 1) + ':00', type: 'Art Walk', artist: '' });
+    if (!plan) return out;
+    if (plan.hours) for (let h = plan.hours[0]; h < plan.hours[1]; h++)
+      out.push({ id: date + '_' + pad(h) + ':00', date, start: pad(h) + ':00', end: pad(h + 1) + ':00', type: 'Gallery', artist: '' });
+    eventSlots(date, plan.events).forEach((s) => out.push(Object.assign(s, { artist: '' })));
     return out;
   }
   // first fill with example bookings
-  for (let i = 0; i < 35; i++) {
+  for (let i = 0; i < 70; i++) {
     const d = new Date(first); d.setDate(first.getDate() + i);
     const all = slotsFor(iso(d)), fillRate = i < 14 ? 0.8 : 0.4;
-    const slots = all.filter((s) => s.type !== 'Art Walk');
+    const slots = all.filter((s) => s.type === 'Gallery');
+    // other events: fill some places
+    const others = all.filter((s) => s.type !== 'Gallery' && s.type !== 'Art Walk');
+    const crew2 = artists.filter((n) => n !== 'Jo (you)').sort(() => rand() - 0.5);
+    const bySlot = {};
+    others.forEach((s) => { (bySlot[s.type + s.start] = bySlot[s.type + s.start] || []).push(s); });
+    Object.keys(bySlot).forEach((k, i) => { bySlot[k].slice(0, 2 + (i % 2)).forEach((s, j) => { s.artist = crew2[(i * 3 + j) % crew2.length]; }); });
+    shifts.push(...others);
     // Art Walk: a few people each taking an hour or more
     const walk = all.filter((s) => s.type === 'Art Walk');
     // example: 5pm has 3, 6pm is full with 4, 7pm still needs 1
@@ -320,10 +366,10 @@ const demo = DEMO ? (() => {
     }
     shifts.push(...slots);
   }
-  const t = shifts.find((s) => s.artist && s.artist !== 'Jo (you)' && s.type !== 'Art Walk');
+  const t = shifts.find((s) => s.artist && s.artist !== 'Jo (you)' && s.type === 'Gallery');
   if (t) shifts.filter((s) => s.date === t.date && s.artist === t.artist).forEach((s) => { s.artist = 'Jo (you)'; });
   // an example note
-  const n = shifts.find((s) => s.artist && s.artist !== 'Jo (you)' && s.type !== 'Art Walk');
+  const n = shifts.find((s) => s.artist && s.artist !== 'Jo (you)' && s.type === 'Gallery');
   if (n) shifts.filter((s) => s.date === n.date && s.artist === n.artist).forEach((s) => { s.note = 'covering for Gerry'; });
 
   function setDay(date, sp) {
@@ -349,11 +395,45 @@ function defaultsFor(date) {
   const open = p.openDays.indexOf(wd) !== -1;
   return { open, hours: p.hours || [11, 17], walk: open && wd === 5 && d.getDate() >= 8 && d.getDate() <= 14 ? p.walk : null };
 }
+const EVENT_DEFAULTS = {
+  'Art Walk': { start: 17, end: 20, needed: 3, max: 4, mode: 'hour' },
+  'Installation': { start: 10, end: 14, needed: 3, max: 4, mode: 'block' },
+  'Take down': { start: 10, end: 13, needed: 2, max: 3, mode: 'block' },
+  'Opening reception': { start: 17, end: 20, needed: 4, max: 6, mode: 'block' }
+};
+function artWalkEvent(range) {
+  const p = state.pattern || {};
+  return { name: WALK, start: range[0], end: range[1], needed: p.walkNeeded || 3, max: p.walkMax || 4, mode: 'hour' };
+}
+function defaultEvents(date) { const def = defaultsFor(date); return def.walk ? [artWalkEvent(def.walk)] : []; }
+function eventsFor(date, specials) {
+  const sp = (specials || state.specials || {})[date] || {};
+  if ('events' in sp) return sp.events || [];
+  if ('walk' in sp) return sp.walk ? [artWalkEvent(sp.walk)] : [];
+  return defaultEvents(date);
+}
+function eventMeta(date, type) {
+  return eventsFor(date).find((e) => e.name === type) || { name: type, needed: (state.pattern || {}).walkNeeded || 3, max: 4, mode: 'hour' };
+}
+function slugOf(name) { return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); }
+function eventSlug(name) { return name === WALK ? '' : '_' + slugOf(name); }
+// The rows an event needs: places 1..max, per hour or one for the whole event
+function eventSlots(date, events) {
+  const out = [];
+  (events || []).forEach((e) => {
+    if (e.mode === 'hour') { for (let h = e.start; h < e.end; h++) for (let n = 1; n <= e.max; n++)
+      out.push({ id: date + '_' + pad(h) + ':00' + eventSlug(e.name) + '_w' + n, date, start: pad(h) + ':00', end: pad(h + 1) + ':00', type: e.name }); }
+    else for (let n = 1; n <= e.max; n++) // whole event: no time in the ID, so moving the times keeps everyone's places
+      out.push({ id: date + '_' + slugOf(e.name) + '_w' + n, date, start: pad(e.start) + ':00', end: pad(e.end) + ':00', type: e.name });
+  });
+  return out;
+}
 function planFor(date, specials) {
   const def = defaultsFor(date), sp = (specials || state.specials || {})[date] || {};
-  if (sp.closed) return { closed: true };
-  if (!sp.hours && !def.open && !sp.walk) return null;
-  return { hours: sp.hours || (def.open ? def.hours : null), walk: 'walk' in sp ? sp.walk : def.walk };
+  const events = eventsFor(date, specials);
+  if (sp.closed) return { closed: true, hours: null, events };
+  if (!sp.hours && !def.open && !events.length) return null;
+  return { hours: sp.hours || (def.open ? def.hours : null), events };
 }
 
 function demoApi(method, p) {
@@ -366,8 +446,8 @@ function demoApi(method, p) {
       if (p.action === 'claim') {
         for (let i = 0; i < chosen.length; i++) { // Art Walk: if that place just went, use another free place in the same hour
           const c = chosen[i];
-          if (c.type === 'Art Walk' && c.artist && c.artist !== p.artist) {
-            const alt = demo.shifts.find((x) => x.type === 'Art Walk' && x.date === c.date && x.start === c.start && !x.artist);
+          if (c.type !== 'Gallery' && c.artist && c.artist !== p.artist) {
+            const alt = demo.shifts.find((x) => x.type === c.type && x.date === c.date && x.start === c.start && !x.artist);
             if (alt) chosen[i] = alt;
           }
         }
@@ -397,10 +477,9 @@ function apply(data) {
   state.shifts = (data.shifts || []).sort(byTime);
   state.artists = data.artists || [];
   state.dayInfo = data.days || {};
-  state.walkNeeded = data.walkNeeded || 3;
-  buildWalkHours();
   state.specials = data.specials || {};
   if (data.pattern) state.pattern = data.pattern;
+  buildUnits();
   const note = $('note');
   if (data.demo) { note.textContent = 'Preview with example names. Not connected to the sheet or calendar yet.'; note.hidden = false; }
   else if (data.testMode) { note.textContent = 'Test mode: emails go to the tester only.'; note.hidden = false; }
@@ -435,18 +514,19 @@ function askName() {
   $('nameSelect').innerHTML = '<option value="">Choose your name</option>' +
     state.artists.map((n) => '<option' + (n === state.me ? ' selected' : '') + '>' + esc(n) + '</option>').join('');
   state.sel = []; updateBar();
-  $('whoChip').hidden = true;
+  $('whoChip').hidden = true; $('adminTop').hidden = true;
   show('nameView');
 }
 
 /* ---------- drawing the rota ---------- */
 function render() {
   $('me').textContent = state.me;
-  $('whoName').textContent = state.me; $('whoChip').hidden = !state.me;
+  $('whoName').textContent = state.me; $('whoChip').hidden = !state.me; $('adminTop').hidden = !state.me;
   $('adminbar').hidden = !state.admin;
-  $('adminLink').textContent = state.admin ? 'Stop managing hours' : 'Manage hours';
+  $('adminTop').textContent = state.admin ? 'Exit admin' : 'Admin';
+  $('adminTop').classList.toggle('on', !!state.admin);
   const now = new Date();
-  const openUnits = state.shifts.filter((s) => !isWalk(s) && !s.artist).concat(state.walkHours.filter((w) => walkShort(w) > 0));
+  const openUnits = state.shifts.filter((s) => !isGroup(s) && !s.artist).concat(state.units.filter((w) => walkShort(w) > 0));
   const soonOpen = openUnits.filter((s) => (toDate(s.date) - now) / 86400000 < 14).length;
   const allOpen = openUnits.filter((s) => (toDate(s.date) - now) / 86400000 < 28).length;
   const mine = state.shifts.filter((s) => s.artist === state.me).length;
@@ -466,7 +546,7 @@ function render() {
   const moreLater = state.filter !== 'mine' && Object.keys(days).some((d) => d >= lastDay);
   const dates = Object.keys(days).sort().filter((d) => d < lastDay || state.filter === 'mine').filter((d) =>
     (state.filter === 'all') ||
-    (state.filter === 'open' && (days[d].some((s) => !isWalk(s) && !s.artist) || state.walkHours.some((w) => w.date === d && walkShort(w) > 0))) ||
+    (state.filter === 'open' && (days[d].some((s) => !isGroup(s) && !s.artist) || state.units.some((w) => w.date === d && walkShort(w) > 0))) ||
     (state.filter === 'mine' && days[d].some((s) => s.artist === state.me)));
 
   if (!dates.length) {
@@ -477,14 +557,27 @@ function render() {
   const walkChip = (w) => {
     const k = kindOf(w);
     const sel = state.sel.indexOf(w.id) !== -1;
-    const cls = k === 'taken' ? 'taken' : k;
-    const label = (k === 'mine' ? 'You · ' : '') + w.names.length + '/' + state.walkNeeded;
-    const hour = fmtTime(w.start).replace(':00', '');
+    const label = (k === 'mine' ? 'You · ' : '') + w.names.length + '/' + w.needed;
+    const block = w.mode !== 'hour';
+    const when = block ? fmtTime(w.start) + '–' + fmtTime(w.end) : fmtTime(w.start).replace(':00', '');
     const who = w.names.length ? w.names.join(', ') : 'nobody yet';
-    return '<button class="chip ' + cls + (sel ? ' sel' : '') + '" data-id="' + esc(w.id) + '"' +
+    return '<button class="chip ' + k + (block ? ' wide' : '') + (sel ? ' sel' : '') + '" data-id="' + esc(w.id) + '"' +
       (k === 'taken' && !state.admin ? ' disabled' : ' aria-pressed="' + sel + '"') +
-      ' aria-label="' + esc(fmtDay(w.date) + ' Art Walk ' + fmtTime(w.start) + ' to ' + fmtTime(w.end) + ': ' + w.names.length + ' of ' + state.walkNeeded + ' needed, ' + who) + '">' +
-      '<span class="h">' + hour + '</span><span class="n">' + esc(label) + '</span></button>';
+      ' aria-label="' + esc(fmtDay(w.date) + ' ' + w.type + ' ' + fmtTime(w.start) + ' to ' + fmtTime(w.end) + ': ' + w.names.length + ' of ' + w.needed + ' needed, ' + who) + '">' +
+      '<span class="h">' + when + '</span><span class="n">' + esc(label) + '</span></button>';
+  };
+  // One section per event on a day: heading, slots to join, and who's on it
+  const eventSection = (units) => {
+    const u0 = units[0], last = units[units.length - 1];
+    const block = u0.mode !== 'hour';
+    const names = (u) => u.names.length ? esc(u.names.map((n) => n === state.me ? 'You' : firstName(n)).join(', ')) : 'nobody yet';
+    const short = (u) => walkShort(u) ? ' · <span style="color:var(--brand)">needs ' + walkShort(u) + ' more</span>' : '';
+    return '<div class="sub">' + esc(u0.type) + ' ' + fmtTime(u0.start) + '–' + fmtTime(last.end) +
+      ' · ' + u0.needed + (u0.needed === 1 ? ' person' : ' people') + ' needed' + (block ? '' : ' each hour') + '</div>' +
+      '<div class="hours">' + units.map(walkChip).join('') + '</div>' +
+      '<div class="walklist">' + (block
+        ? '<div>' + names(u0) + short(u0) + '</div>'
+        : units.map((u) => '<div><b>' + fmtTime(u.start) + '</b> ' + names(u) + short(u) + '</div>').join('')) + '</div>';
   };
   const chip = (s) => {
     const k = kindOf(s);
@@ -519,18 +612,18 @@ function render() {
         '<span class="pill ok">Closed</span></span></div><div class="dnote" style="margin:0">' + esc(info.note || 'Gallery closed') + '</div></section>';
       return;
     }
-    const gallery = rows.filter((s) => !isWalk(s));
-    const walk = state.walkHours.filter((w) => w.date === d);
-    const open = gallery.filter((s) => !s.artist).length + walk.filter((w) => walkShort(w) > 0).length;
+    const gallery = rows.filter((s) => !isGroup(s));
+    const units = state.units.filter((w) => w.date === d);
+    const types = []; units.forEach((u) => { if (types.indexOf(u.type) === -1) types.push(u.type); });
+    const galleryOpen = gallery.filter((s) => !s.artist).length;
+    const eventsShort = units.some((w) => walkShort(w) > 0);
+    const pill = galleryOpen ? '<span class="pill need">' + hrs(galleryOpen) + ' open</span>'
+      : eventsShort ? '<span class="pill need">Needs people</span>' : '<span class="pill ok">Covered</span>';
     html += '<section class="day"><div class="dayhead"><span class="dname">' + fmtDay(d) + '</span><span class="pills">' + today +
-      (open ? '<span class="pill need">' + hrs(open) + ' open</span>' : '<span class="pill ok">Covered</span>') + '</span></div>' +
+      (info.closed ? '<span class="pill shut">Gallery closed</span>' : '') + pill + '</span></div>' +
       (info.note ? '<div class="dnote">' + esc(info.note) + '</div>' : '') +
-      '<div class="hours">' + gallery.map(chip).join('') + '</div>' +
-      (walk.length ? '<div class="sub">Art Walk ' + fmtTime(walk[0].start) + '–' + fmtTime(walk[walk.length - 1].end) +
-        ' · ' + state.walkNeeded + ' people needed</div><div class="hours">' + walk.map(walkChip).join('') + '</div>' +
-        '<div class="walklist">' + walk.map((w) => '<div><b>' + fmtTime(w.start) + '</b> ' +
-          (w.names.length ? esc(w.names.map((n) => n === state.me ? 'You' : firstName(n)).join(', ')) : 'nobody yet') +
-          (walkShort(w) ? ' · <span style="color:var(--brand)">needs ' + walkShort(w) + ' more</span>' : '') + '</div>').join('') + '</div>' : '') +
+      (gallery.length ? '<div class="hours">' + gallery.map(chip).join('') + '</div>' : '') +
+      types.map((t) => eventSection(units.filter((u) => u.type === t))).join('') +
       dayNotes(rows) +
       '</section>';
   });
@@ -552,7 +645,7 @@ function dayNotes(rows) {
   });
   if (!groups.length) return '';
   return '<div class="notes">' + groups.map((g) => '<div>' + esc(g.artist === state.me ? 'You' : firstName(g.artist)) + ', ' +
-    fmtTime(g.start) + '–' + fmtTime(g.end) + (isWalk(g) ? ' (Art Walk)' : '') + ': <span>' + esc(g.note) + '</span></div>').join('') + '</div>';
+    fmtTime(g.start) + '–' + fmtTime(g.end) + (isGroup(g) ? ' (' + esc(g.type) + ')' : '') + ': <span>' + esc(g.note) + '</span></div>').join('') + '</div>';
 }
 
 /* ---------- picking hours ---------- */
@@ -561,7 +654,7 @@ function tap(id) {
   const kindFn = (x) => state.admin ? 'any' : kindOf(x);
   const k = kindFn(s); if (k === 'taken') return;
   const sel = state.sel.map(find).filter(Boolean).sort(byTime);
-  const sameRun = sel.length && sel[0].date === s.date && !!sel[0].virtual === !!s.virtual &&
+  const sameRun = sel.length && sel[0].date === s.date && !!sel[0].virtual === !!s.virtual && sel[0].type === s.type &&
     (kindFn(sel[0]) === k || (s.virtual && k !== 'mine' && kindFn(sel[0]) !== 'mine'));
 
   if (!sameRun) state.sel = [id];
@@ -573,7 +666,7 @@ function tap(id) {
     // stretch the block to the tapped hour, if every hour in between is the same kind
     const lo = s.start < sel[0].start ? s.start : sel[0].start;
     const hi = s.end > sel[sel.length - 1].end ? s.end : sel[sel.length - 1].end;
-    const pool = s.virtual ? state.walkHours : state.shifts.filter((x) => !isWalk(x));
+    const pool = s.virtual ? state.units.filter((x) => x.type === s.type) : state.shifts.filter((x) => !isGroup(x));
     const span = pool.filter((x) => x.date === s.date && x.start >= lo && x.end <= hi).sort(byTime);
     const same = (x) => s.virtual && k !== 'mine' ? ['open', 'room'].indexOf(kindFn(x)) !== -1 : kindFn(x) === k;
     const joined = span.every((x, i) => same(x) && (i === 0 || x.start === span[i - 1].end));
@@ -595,7 +688,7 @@ function updateBar() {
     $('barWhoRow').hidden = false; $('barNoteRow').hidden = true;
     $('barRemove').hidden = sel[0].virtual ? !sel.some((x) => x.names.length) : !sel.some((x) => x.artist);
     $('barRemove').textContent = sel[0].virtual ? 'Remove this person' : 'Remove';
-    if (sel[0].virtual) $('barText').textContent = 'Art Walk ' + range + ' (' + hrs(sel.length) + '). Add or remove:';
+    if (sel[0].virtual) $('barText').textContent = sel[0].type + ', ' + range + (sel[0].mode === 'hour' ? ' (' + hrs(sel.length) + ')' : '') + '. Add or remove:';
     go.textContent = state.busy ? 'Saving…' : 'Book';
     go.classList.remove('release'); go.classList.add('admin');
     go.disabled = state.busy;
@@ -607,7 +700,7 @@ function updateBar() {
   $('barNoteRow').hidden = releasing;
   const range = fmtDay(sel[0].date) + ', ' + fmtTime(sel[0].start) + '–' + fmtTime(sel[sel.length - 1].end);
   if (sel[0].virtual) {
-    $('barText').textContent = (releasing ? 'Leave the Art Walk, ' : 'Join the Art Walk, ') + range + ' (' + hrs(sel.length) + ')';
+    $('barText').textContent = (releasing ? 'Leave ' : 'Join ') + sel[0].type + ', ' + range + (sel[0].mode === 'hour' ? ' (' + hrs(sel.length) + ')' : '');
     go.textContent = state.busy ? 'Saving…' : releasing ? 'Leave' : 'Join';
   } else {
     $('barText').textContent = (releasing ? 'Give up ' : 'Take ') + range + ' (' + hrs(sel.length) + ')';
@@ -633,7 +726,7 @@ async function adminBook(artist) {
       for (const w of sel) {
         if (w.names.indexOf(name) !== -1) continue;
         const free = w.seats.find((r) => !r.artist);
-        if (!free) { toast('The Art Walk is full at ' + fmtTime(w.start) + '.'); return; }
+        if (!free) { toast(w.type + ' is full' + (w.mode === 'hour' ? ' at ' + fmtTime(w.start) : '') + '.'); return; }
         ids.push(free.id);
       }
       if (!ids.length) { toast(name + ' is already on those hours.'); return; }
@@ -668,7 +761,7 @@ async function submit() {
     state.busy = false;
     if (!data.ok) { toast(data.error); state.sel = []; return load(); }
     apply(data); state.sel = []; render();
-    toast(sel[0].virtual ? (action === 'claim' ? 'Thanks! You\'re on the Art Walk.' : 'Done. You\'re off those Art Walk hours.')
+    toast(sel[0].virtual ? (action === 'claim' ? 'Thanks! You\'re on the ' + sel[0].type + '.' : 'Done. You\'re off the ' + sel[0].type + '.')
       : action === 'claim' ? 'Thanks! Your hours are on the calendar.' : 'Done. Those hours are open again.');
   } catch (e) {
     state.busy = false; toast('Something went wrong. Please try again.'); updateBar();
@@ -690,6 +783,8 @@ function openEditor(date) {
   $('edDefault').textContent = def.open
     ? 'Normally open ' + rangeText(def.hours) + (def.walk ? ', plus Art Walk ' + rangeText(def.walk) : '') + '.'
     : 'Normally closed.';
+  state.edEvents = JSON.parse(JSON.stringify(eventsFor(date))); state.evEditing = null;
+  renderEvList(); $('evForm').hidden = true; $('evAddBtn').hidden = false;
   $('optNormalRow').hidden = !def.open;
   $('optCustomText').textContent = def.open ? 'Different hours' : 'Open these hours';
   $('optClosedRow').querySelector('input').nextSibling.textContent = def.open ? ' Closed all day' : ' Closed (as normal)';
@@ -698,10 +793,6 @@ function openEditor(date) {
   document.querySelector('input[name="mode"][value="' + mode + '"]').checked = true;
   const hrsR = sp.hours || def.hours;
   hourOptions($('hStart'), 7, 20, hrsR[0]); hourOptions($('hEnd'), 8, 22, hrsR[1]);
-  const walk = 'walk' in sp ? sp.walk : def.walk;
-  $('walkOn').checked = !!walk;
-  const w = walk || [17, 20];
-  hourOptions($('wStart'), 15, 21, w[0]); hourOptions($('wEnd'), 16, 23, w[1]);
   $('edNote').value = sp.note || '';
   syncEditor();
   $('editor').hidden = false;
@@ -713,10 +804,8 @@ function readEditor() {
   const sp = {};
   if (mode === 'closed') { if (def.open) sp.closed = true; }
   else if (mode === 'custom') sp.hours = [+$('hStart').value, +$('hEnd').value];
-  if (mode !== 'closed') {
-    const walk = $('walkOn').checked ? [+$('wStart').value, +$('wEnd').value] : null;
-    if (JSON.stringify(walk) !== JSON.stringify(def.walk)) sp.walk = walk;
-  }
+  const norm = (list) => JSON.stringify((list || []).map((e) => [e.name, e.start, e.end, e.needed, e.max, e.mode]));
+  if (norm(state.edEvents) !== norm(defaultEvents(date))) sp.events = state.edEvents;
   const note = $('edNote').value.trim();
   if (note) sp.note = note;
   return Object.keys(sp).length ? sp : null;
@@ -725,32 +814,64 @@ function readEditor() {
 function syncEditor() {
   const mode = document.querySelector('input[name="mode"]:checked').value;
   $('customTimes').hidden = mode !== 'custom';
-  $('walkSet').hidden = mode === 'closed';
-  $('walkTimes').hidden = !$('walkOn').checked;
-  const bad = (mode === 'custom' && +$('hEnd').value <= +$('hStart').value) ||
-              ($('walkOn').checked && mode !== 'closed' && +$('wEnd').value <= +$('wStart').value);
+  const bad = mode === 'custom' && +$('hEnd').value <= +$('hStart').value;
   // which bookings would be lost?
   const sp = readEditor(), date = state.editing;
   const keep = new Set();
   const def = defaultsFor(date), p = sp || {};
   if (!p.closed && !(mode === 'closed')) {
     const hoursR = p.hours || (def.open ? def.hours : null);
-    const walkR = 'walk' in p ? p.walk : def.walk;
-    if (hoursR) for (let h = hoursR[0]; h < hoursR[1]; h++) keep.add('Gallery' + h);
-    if (walkR) for (let h = walkR[0]; h < walkR[1]; h++) keep.add('Art Walk' + h);
+    if (hoursR) for (let h = hoursR[0]; h < hoursR[1]; h++) keep.add('Gallery|' + h);
   }
-  const lost = state.shifts.filter((s) => s.date === date && s.artist && !keep.has(s.type + parseInt(s.start, 10)));
+  const keyOf = (s) => s.type + '|' + (/^\d{4}-\d{2}-\d{2}_\d/.test(s.id) ? parseInt(s.start, 10) : 'whole');
+  eventSlots(date, state.edEvents).forEach((s) => keep.add(keyOf(s)));
+  const lost = state.shifts.filter((s) => s.date === date && s.artist && !keep.has(keyOf(s)));
   const who = {};
   lost.forEach((s) => { (who[s.artist] = who[s.artist] || []).push(fmtTime(s.start)); });
   const names = Object.keys(who);
   const warn = $('edWarn');
   if (bad) { warn.textContent = 'The closing time needs to be after the opening time.'; warn.hidden = false; }
   else if (names.length) {
-    warn.textContent = 'This removes hours already booked by ' + names.map((n) => n + ' (' + who[n].join(', ') + ')').join(', ') +
-      '. They\'ll get an email saying the hours have changed.';
+    warn.textContent = 'This closes hours already booked by ' + names.map((n) => n + ' (' + who[n].join(', ') + ')').join(', ') +
+      '. They\'ll get an email. If you change it back later, their bookings come back.';
     warn.hidden = false;
   } else warn.hidden = true;
   $('edSave').disabled = bad;
+}
+
+function renderEvList() {
+  $('evList').innerHTML = state.edEvents.length ? state.edEvents.map((e, i) =>
+    '<div class="evrow"><span><b>' + esc(e.name) + '</b> ' + rangeText([e.start, e.end]) + ' · ' + e.needed + ' needed' +
+    (e.max > e.needed ? ' (up to ' + e.max + ')' : '') + ' · ' + (e.mode === 'hour' ? 'by the hour' : 'whole event') + '</span>' +
+    '<button type="button" data-evedit="' + i + '">Edit</button><button type="button" data-evdel="' + i + '">Remove</button></div>').join('')
+    : '<p class="hint" style="margin:0;color:var(--muted);font-size:14px">No events this day.</p>';
+}
+function countOptions(sel, from, to, chosen) {
+  let o = ''; for (let n = from; n <= to; n++) o += '<option value="' + n + '"' + (n === chosen ? ' selected' : '') + '>' + n + '</option>';
+  sel.innerHTML = o;
+}
+function fillEvForm(existing) {
+  const t = $('evType').value;
+  $('evName').hidden = t !== 'other';
+  const d = existing || EVENT_DEFAULTS[t] || { start: 10, end: 13, needed: 2, max: 3, mode: 'block' };
+  hourOptions($('evStart'), 7, 22, d.start); hourOptions($('evEnd'), 8, 23, d.end);
+  countOptions($('evNeeded'), 1, 10, d.needed); countOptions($('evMax'), 1, 12, d.max);
+  document.querySelector('input[name="evMode"][value="' + d.mode + '"]').checked = true;
+}
+function addEvent() {
+  const t = $('evType').value;
+  const name = t === 'other' ? $('evName').value.trim() : t;
+  const e = { name, start: +$('evStart').value, end: +$('evEnd').value, needed: +$('evNeeded').value, max: +$('evMax').value,
+              mode: document.querySelector('input[name="evMode"]:checked').value };
+  if (!name) { toast('Give the event a name.'); return; }
+  if (e.end <= e.start) { toast('The event needs to end after it starts.'); return; }
+  if (e.max < e.needed) e.max = e.needed;
+  const editing = state.evEditing;
+  if (state.edEvents.some((x, i) => i !== editing && x.name.toLowerCase() === name.toLowerCase())) { toast('There\'s already a ' + name + ' that day.'); return; }
+  if (editing !== null && editing !== undefined) state.edEvents[editing] = e; else state.edEvents.push(e);
+  state.evEditing = null;
+  $('evForm').hidden = true; $('evAddBtn').hidden = false;
+  renderEvList(); syncEditor();
 }
 
 async function saveDay() {
@@ -760,7 +881,7 @@ async function saveDay() {
     const data = await api('POST', { action: 'setDay', date, special: sp, admin: state.adminPass });
     if (!data.ok) { toast(data.error); return; }
     apply(data); $('editor').hidden = true; state.sel = []; render();
-    toast(sp ? 'Saved. Artists see the new hours now.' : 'Saved. Back to normal hours.');
+    toast(sp ? 'Saved. Artists see the changes now.' : 'Saved. Back to normal hours.');
   } catch (e) {
     toast('Couldn\'t save. Please try again.');
   } finally {
@@ -796,7 +917,7 @@ $('list').onclick = (e) => { const b = e.target.closest('button.chip'); if (b &&
 $('barClear').onclick = () => { state.sel = []; $('barNote').value = ''; render(); };
 $('barGo').onclick = submit;
 $('barRemove').onclick = () => adminBook('');
-$('adminLink').onclick = (e) => {
+$('adminTop').onclick = (e) => {
   e.preventDefault();
   if (state.admin) { state.admin = false; state.sel = []; render(); return; }
   $('adminHint').textContent = DEMO ? 'In this preview any passcode works.' : 'Ask Nadia for the admin passcode.';
@@ -826,7 +947,27 @@ $('addBtn').onclick = () => {
   openEditor(d);
 };
 document.querySelectorAll('input[name="mode"]').forEach((r) => { r.onchange = syncEditor; });
-['hStart', 'hEnd', 'wStart', 'wEnd', 'walkOn'].forEach((id) => { $(id).onchange = syncEditor; });
+['hStart', 'hEnd'].forEach((id) => { $(id).onchange = syncEditor; });
+$('evAddBtn').onclick = () => {
+  state.evEditing = null; $('evOk').textContent = 'Add event';
+  $('evType').value = 'Installation'; $('evName').value = ''; fillEvForm(); $('evForm').hidden = false; $('evAddBtn').hidden = true;
+};
+$('evType').onchange = () => fillEvForm();
+$('evCancel').onclick = () => { state.evEditing = null; $('evForm').hidden = true; $('evAddBtn').hidden = false; };
+$('evOk').onclick = addEvent;
+$('evList').addEventListener('click', (e) => {
+  const ed = e.target.closest('button[data-evedit]');
+  if (ed) { // open the form filled in with this event
+    const i = +ed.dataset.evedit, ev = state.edEvents[i];
+    state.evEditing = i; $('evOk').textContent = 'Save changes';
+    const known = Object.keys(EVENT_DEFAULTS).indexOf(ev.name) !== -1;
+    $('evType').value = known ? ev.name : 'other'; $('evName').value = known ? '' : ev.name;
+    fillEvForm(ev); $('evForm').hidden = false; $('evAddBtn').hidden = true;
+    return;
+  }
+  const b = e.target.closest('button[data-evdel]'); if (!b) return;
+  state.edEvents.splice(+b.dataset.evdel, 1); state.evEditing = null; renderEvList(); syncEditor();
+});
 $('edCancel').onclick = () => { $('editor').hidden = true; };
 $('editor').addEventListener('click', (e) => { if (e.target.id === 'editor') $('editor').hidden = true; });
 $('edSave').onclick = saveDay;
