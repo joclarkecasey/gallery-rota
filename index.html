@@ -76,6 +76,11 @@
   .chip.open .n { color: var(--brand); font-weight: 600; }
   .chip.mine { background: var(--mine-soft); border-color: var(--mine); }
   .chip.mine .n { color: var(--mine); font-weight: 600; }
+  .chip.room { background: var(--card); border: 1px dashed var(--walk); }
+  .chip.room .n { color: var(--walk); font-weight: 600; }
+  .chip.room.sel { background: var(--walk); color: var(--on-brand); }
+  .walklist { margin: 8px 2px 0; font-size: 13px; color: var(--muted); display: grid; gap: 2px; }
+  .walklist b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
   .chip.open.sel { background: var(--brand); color: var(--on-brand); }
   .chip.mine.sel { background: var(--mine); color: var(--bg); }
   .chip.sel .n { color: inherit; }
@@ -112,7 +117,10 @@
   .bar p { margin: 0 auto 10px; max-width: 528px; font-weight: 600; }
   .bar div { display: flex; gap: 8px; max-width: 528px; margin: 0 auto; }
   .bar button { flex: 1; }
-  #barWhoRow { margin-bottom: 8px; }
+  #barWhoRow, #barNoteRow { margin-bottom: 8px; }
+  #barNote { padding: 10px; font-size: 15px; }
+  .notes { margin: 8px 2px 0; font-size: 13px; color: var(--muted); display: grid; gap: 2px; }
+  .notes span { color: var(--text); }
   #barWhoRow select { padding: 10px; }
   .bar .go.admin { background: var(--walk); color: var(--on-brand); }
   .bar .clear { background: var(--bg); color: var(--text); border: 1px solid var(--line); flex: 0 0 auto; }
@@ -176,6 +184,7 @@
 <div class="bar" id="bar" hidden>
   <p id="barText"></p>
   <div id="barWhoRow" hidden><select id="barWho" aria-label="Book for"></select></div>
+  <div id="barNoteRow" hidden><input id="barNote" maxlength="100" placeholder="Add a note (optional), e.g. covering for Gerry" aria-label="Note"></div>
   <div><button class="clear" id="barClear">Clear</button><button class="clear" id="barRemove" hidden>Remove</button><button class="go" id="barGo">Take</button></div>
 </div>
 <div class="overlay" id="editor" hidden>
@@ -225,8 +234,31 @@ function fmtTime(t) { let [h, m] = t.split(':').map(Number); const ap = h >= 12 
 function fmtDay(d) { return toDate(d).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }); }
 function weekStart(d) { const x = toDate(d); x.setDate(x.getDate() - x.getDay()); return x; }
 const byTime = (a, b) => (a.date + a.start).localeCompare(b.date + b.start);
-const find = (id) => state.shifts.find((s) => s.id === id);
-function kindOf(s) { return !s.artist ? 'open' : s.artist === state.me ? 'mine' : 'taken'; }
+const find = (id) => state.shifts.find((s) => s.id === id) || (state.walkHours || []).find((s) => s.id === id);
+const WALK = 'Art Walk';
+const isWalk = (s) => s.type === WALK;
+// Art Walk hours hold several people: 'mine', 'open' (still short), 'room' (enough, space for more) or 'taken' (full)
+function kindOf(s) {
+  if (s.virtual) {
+    if (s.names.indexOf(state.me) !== -1) return 'mine';
+    if (s.names.length < state.walkNeeded) return 'open';
+    return s.names.length < s.seats.length ? 'room' : 'taken';
+  }
+  return !s.artist ? 'open' : s.artist === state.me ? 'mine' : 'taken';
+}
+function buildWalkHours() {
+  const by = {};
+  state.shifts.filter(isWalk).forEach((r) => {
+    const k = r.date + '|' + r.start;
+    (by[k] = by[k] || { id: 'W|' + k, date: r.date, start: r.start, end: r.end, type: WALK, virtual: true, seats: [], names: [] }).seats.push(r);
+  });
+  state.walkHours = Object.keys(by).sort().map((k) => {
+    const w = by[k];
+    w.names = w.seats.filter((r) => r.artist && r.artist.toUpperCase() !== 'CLOSED').map((r) => r.artist);
+    return w;
+  });
+}
+const walkShort = (w) => Math.max(0, state.walkNeeded - w.names.length);
 function firstName(n) { return n.toUpperCase() === 'CLOSED' ? 'Closed' : n.split(' ')[0]; }
 const hrs = (n) => n + ' hour' + (n === 1 ? '' : 's');
 
@@ -244,8 +276,6 @@ const demo = DEMO ? (() => {
   let seed = 11; const rand = () => { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; };
   // Example changes, as an admin would enter them
   const special = {
-    '2026-10-09': { walk: null },
-    '2026-10-16': { walk: [17, 21], note: 'Art Walk moved from Oct 9' },
     '2026-10-22': { closed: true, note: 'Closed for the gallery install' },
     '2026-10-31': { hours: [11, 15], note: 'Halloween: closing at 3pm' }
   };
@@ -258,13 +288,28 @@ const demo = DEMO ? (() => {
     const plan = planFor(date, special), out = [];
     if (!plan || plan.closed) return out;
     const add = (r, type) => { if (r) for (let h = r[0]; h < r[1]; h++) out.push({ id: date + '_' + pad(h) + ':00', date, start: pad(h) + ':00', end: pad(h + 1) + ':00', type, artist: '' }); };
-    add(plan.hours, 'Gallery'); add(plan.walk, 'Art Walk');
+    add(plan.hours, 'Gallery');
+    if (plan.walk) for (let h = plan.walk[0]; h < plan.walk[1]; h++) for (let n = 1; n <= 4; n++)
+      out.push({ id: date + '_' + pad(h) + ':00_w' + n, date, start: pad(h) + ':00', end: pad(h + 1) + ':00', type: 'Art Walk', artist: '' });
     return out;
   }
   // first fill with example bookings
   for (let i = 0; i < 35; i++) {
     const d = new Date(first); d.setDate(first.getDate() + i);
-    const slots = slotsFor(iso(d)), fillRate = i < 14 ? 0.8 : 0.4;
+    const all = slotsFor(iso(d)), fillRate = i < 14 ? 0.8 : 0.4;
+    const slots = all.filter((s) => s.type !== 'Art Walk');
+    // Art Walk: a few people each taking an hour or more
+    const walk = all.filter((s) => s.type === 'Art Walk');
+    // example: 5pm has 3, 6pm is full with 4, 7pm still needs 1
+    const crew = artists.filter((n) => n !== 'Jo (you)').sort(() => rand() - 0.5).slice(0, 4);
+    const plan = [[17, 20], [17, 20], [17, 19], [18, 19]];
+    crew.forEach((who, ci) => {
+      for (let h = plan[ci][0]; h < plan[ci][1]; h++) {
+        const seat = walk.find((s) => s.start === pad(h) + ':00' && !s.artist);
+        if (seat) seat.artist = who;
+      }
+    });
+    shifts.push(...walk);
     let k = 0;
     while (k < slots.length) {
       const len = 1 + Math.floor(rand() * 3);
@@ -273,8 +318,11 @@ const demo = DEMO ? (() => {
     }
     shifts.push(...slots);
   }
-  const t = shifts.find((s) => s.artist && s.artist !== 'Jo (you)');
+  const t = shifts.find((s) => s.artist && s.artist !== 'Jo (you)' && s.type !== 'Art Walk');
   if (t) shifts.filter((s) => s.date === t.date && s.artist === t.artist).forEach((s) => { s.artist = 'Jo (you)'; });
+  // an example note
+  const n = shifts.find((s) => s.artist && s.artist !== 'Jo (you)' && s.type !== 'Art Walk');
+  if (n) shifts.filter((s) => s.date === n.date && s.artist === n.artist).forEach((s) => { s.note = 'covering for Gerry'; });
 
   function setDay(date, sp) {
     if (sp) special[date] = sp; else delete special[date];
@@ -292,10 +340,10 @@ const demo = DEMO ? (() => {
   return { artists, shifts, special, setDay, info, firstIso, lastIso };
 })() : null;
 
-// The normal pattern: Thu–Sat 11–5, Art Walk 5–9 on the 2nd Friday
+// The normal pattern: Thu–Sat 11–5, Art Walk 5–8 on the 2nd Friday
 function defaultsFor(date) {
   const d = toDate(date), wd = d.getDay();
-  const p = state.pattern || { openDays: [4, 5, 6], hours: [11, 17], walk: [17, 21] };
+  const p = state.pattern || { openDays: [4, 5, 6], hours: [11, 17], walk: [17, 20] };
   const open = p.openDays.indexOf(wd) !== -1;
   return { open, hours: p.hours || [11, 17], walk: open && wd === 5 && d.getDate() >= 8 && d.getDate() <= 14 ? p.walk : null };
 }
@@ -309,17 +357,24 @@ function planFor(date, specials) {
 function demoApi(method, p) {
   if (method === 'POST') {
     if (p.action === 'checkAdmin') return { ok: true };
-    if (p.action === 'adminBook') p.shiftIds.forEach((id) => { const s = demo.shifts.find((x) => x.id === id); if (s) s.artist = p.artist; });
+    if (p.action === 'adminBook') p.shiftIds.forEach((id) => { const s = demo.shifts.find((x) => x.id === id); if (s) { s.artist = p.artist; s.note = ''; } });
     if (p.action === 'setDay') { demo.setDay(p.date, p.special); }
     else if (p.action !== 'adminBook') {
       const chosen = p.shiftIds.map((id) => demo.shifts.find((s) => s.id === id));
       if (p.action === 'claim') {
+        for (let i = 0; i < chosen.length; i++) { // Art Walk: if that place just went, use another free place in the same hour
+          const c = chosen[i];
+          if (c.type === 'Art Walk' && c.artist && c.artist !== p.artist) {
+            const alt = demo.shifts.find((x) => x.type === 'Art Walk' && x.date === c.date && x.start === c.start && !x.artist);
+            if (alt) chosen[i] = alt;
+          }
+        }
         if (chosen.some((c) => c.artist && c.artist !== p.artist)) return { ok: false, error: 'Sorry, someone just took one of those hours.' };
-        chosen.forEach((c) => { c.artist = p.artist; });
-      } else chosen.forEach((c) => { if (c.artist === p.artist) c.artist = ''; });
+        chosen.forEach((c) => { c.artist = p.artist; c.note = p.note || ''; });
+      } else chosen.forEach((c) => { if (c.artist === p.artist) { c.artist = ''; c.note = ''; } });
     }
   }
-  return { ok: true, artists: demo.artists.slice(), shifts: demo.shifts.map((s) => Object.assign({}, s)), days: demo.info(),
+  return { ok: true, artists: demo.artists.slice(), shifts: demo.shifts.map((s) => Object.assign({}, s)), days: demo.info(), walkNeeded: 3,
            specials: JSON.parse(JSON.stringify(demo.special)), demo: true };
 }
 
@@ -340,6 +395,8 @@ function apply(data) {
   state.shifts = (data.shifts || []).sort(byTime);
   state.artists = data.artists || [];
   state.dayInfo = data.days || {};
+  state.walkNeeded = data.walkNeeded || 3;
+  buildWalkHours();
   state.specials = data.specials || {};
   if (data.pattern) state.pattern = data.pattern;
   const note = $('note');
@@ -387,8 +444,9 @@ function render() {
   $('adminbar').hidden = !state.admin;
   $('adminLink').textContent = state.admin ? 'Stop managing hours' : 'Manage hours';
   const now = new Date();
-  const soonOpen = state.shifts.filter((s) => !s.artist && (toDate(s.date) - now) / 86400000 < 14).length;
-  const allOpen = state.shifts.filter((s) => !s.artist && (toDate(s.date) - now) / 86400000 < 28).length;
+  const openUnits = state.shifts.filter((s) => !isWalk(s) && !s.artist).concat(state.walkHours.filter((w) => walkShort(w) > 0));
+  const soonOpen = openUnits.filter((s) => (toDate(s.date) - now) / 86400000 < 14).length;
+  const allOpen = openUnits.filter((s) => (toDate(s.date) - now) / 86400000 < 28).length;
   const mine = state.shifts.filter((s) => s.artist === state.me).length;
   $('summary').innerHTML = (soonOpen
     ? '<strong>' + hrs(soonOpen) + ' open</strong> in the next two weeks'
@@ -405,7 +463,7 @@ function render() {
   const lastDay = iso(until);
   const dates = Object.keys(days).sort().filter((d) => d < lastDay).filter((d) =>
     (state.filter === 'all') ||
-    (state.filter === 'open' && days[d].some((s) => !s.artist)) ||
+    (state.filter === 'open' && (days[d].some((s) => !isWalk(s) && !s.artist) || state.walkHours.some((w) => w.date === d && walkShort(w) > 0))) ||
     (state.filter === 'mine' && days[d].some((s) => s.artist === state.me)));
 
   if (!dates.length) {
@@ -413,6 +471,18 @@ function render() {
     updateBar(); return show('mainView');
   }
 
+  const walkChip = (w) => {
+    const k = kindOf(w);
+    const sel = state.sel.indexOf(w.id) !== -1;
+    const cls = k === 'taken' ? 'taken' : k;
+    const label = (k === 'mine' ? 'You · ' : '') + w.names.length + '/' + state.walkNeeded;
+    const hour = fmtTime(w.start).replace(':00', '');
+    const who = w.names.length ? w.names.join(', ') : 'nobody yet';
+    return '<button class="chip ' + cls + (sel ? ' sel' : '') + '" data-id="' + esc(w.id) + '"' +
+      (k === 'taken' && !state.admin ? ' disabled' : ' aria-pressed="' + sel + '"') +
+      ' aria-label="' + esc(fmtDay(w.date) + ' Art Walk ' + fmtTime(w.start) + ' to ' + fmtTime(w.end) + ': ' + w.names.length + ' of ' + state.walkNeeded + ' needed, ' + who) + '">' +
+      '<span class="h">' + hour + '</span><span class="n">' + esc(label) + '</span></button>';
+  };
   const chip = (s) => {
     const k = kindOf(s);
     const sel = state.sel.indexOf(s.id) !== -1;
@@ -446,19 +516,38 @@ function render() {
         '<span class="pill ok">Closed</span></span></div><div class="dnote" style="margin:0">' + esc(info.note || 'Gallery closed') + '</div></section>';
       return;
     }
-    const open = rows.filter((s) => !s.artist).length;
-    const gallery = rows.filter((s) => s.type !== 'Art Walk');
-    const walk = rows.filter((s) => s.type === 'Art Walk');
+    const gallery = rows.filter((s) => !isWalk(s));
+    const walk = state.walkHours.filter((w) => w.date === d);
+    const open = gallery.filter((s) => !s.artist).length + walk.filter((w) => walkShort(w) > 0).length;
     html += '<section class="day"><div class="dayhead"><span class="dname">' + fmtDay(d) + '</span><span class="pills">' + today +
       (open ? '<span class="pill need">' + hrs(open) + ' open</span>' : '<span class="pill ok">Covered</span>') + '</span></div>' +
       (info.note ? '<div class="dnote">' + esc(info.note) + '</div>' : '') +
       '<div class="hours">' + gallery.map(chip).join('') + '</div>' +
-      (walk.length ? '<div class="sub">Art Walk ' + fmtTime(walk[0].start) + '–' + fmtTime(walk[walk.length - 1].end) + '</div><div class="hours">' + walk.map(chip).join('') + '</div>' : '') +
+      (walk.length ? '<div class="sub">Art Walk ' + fmtTime(walk[0].start) + '–' + fmtTime(walk[walk.length - 1].end) +
+        ' · ' + state.walkNeeded + ' people needed</div><div class="hours">' + walk.map(walkChip).join('') + '</div>' +
+        '<div class="walklist">' + walk.map((w) => '<div><b>' + fmtTime(w.start) + '</b> ' +
+          (w.names.length ? esc(w.names.map((n) => n === state.me ? 'You' : firstName(n)).join(', ')) : 'nobody yet') +
+          (walkShort(w) ? ' · <span style="color:var(--brand)">needs ' + walkShort(w) + ' more</span>' : '') + '</div>').join('') + '</div>' : '') +
+      dayNotes(rows) +
       '</section>';
   });
   $('list').innerHTML = html + '</div>';
   updateBar();
   show('mainView');
+}
+
+// "Bea, 1–3pm: covering for Gerry" lines for a day
+function dayNotes(rows) {
+  const groups = [];
+  rows.filter((r) => r.artist && r.note).sort(byTime).forEach((r) => {
+    const g = groups.find((x) => x.artist === r.artist && x.type === r.type && x.note === r.note && x.end === r.start);
+    if (g) g.end = r.end;
+    else if (!groups.some((x) => x.artist === r.artist && x.type === r.type && x.note === r.note && x.start === r.start))
+      groups.push({ artist: r.artist, type: r.type, note: r.note, start: r.start, end: r.end });
+  });
+  if (!groups.length) return '';
+  return '<div class="notes">' + groups.map((g) => '<div>' + esc(g.artist === state.me ? 'You' : firstName(g.artist)) + ', ' +
+    fmtTime(g.start) + '–' + fmtTime(g.end) + (isWalk(g) ? ' (Art Walk)' : '') + ': <span>' + esc(g.note) + '</span></div>').join('') + '</div>';
 }
 
 /* ---------- picking hours ---------- */
@@ -467,7 +556,8 @@ function tap(id) {
   const kindFn = (x) => state.admin ? 'any' : kindOf(x);
   const k = kindFn(s); if (k === 'taken') return;
   const sel = state.sel.map(find).filter(Boolean).sort(byTime);
-  const sameRun = sel.length && sel[0].date === s.date && kindFn(sel[0]) === k;
+  const sameRun = sel.length && sel[0].date === s.date && !!sel[0].virtual === !!s.virtual &&
+    (kindFn(sel[0]) === k || (s.virtual && k !== 'mine' && kindFn(sel[0]) !== 'mine'));
 
   if (!sameRun) state.sel = [id];
   else if (state.sel.indexOf(id) !== -1) {
@@ -478,8 +568,10 @@ function tap(id) {
     // stretch the block to the tapped hour, if every hour in between is the same kind
     const lo = s.start < sel[0].start ? s.start : sel[0].start;
     const hi = s.end > sel[sel.length - 1].end ? s.end : sel[sel.length - 1].end;
-    const span = state.shifts.filter((x) => x.date === s.date && x.start >= lo && x.end <= hi).sort(byTime);
-    const joined = span.every((x, i) => kindFn(x) === k && (i === 0 || x.start === span[i - 1].end));
+    const pool = s.virtual ? state.walkHours : state.shifts.filter((x) => !isWalk(x));
+    const span = pool.filter((x) => x.date === s.date && x.start >= lo && x.end <= hi).sort(byTime);
+    const same = (x) => s.virtual && k !== 'mine' ? ['open', 'room'].indexOf(kindFn(x)) !== -1 : kindFn(x) === k;
+    const joined = span.every((x, i) => same(x) && (i === 0 || x.start === span[i - 1].end));
     state.sel = joined ? span.map((x) => x.id) : [id];
   }
   render();
@@ -494,9 +586,11 @@ function updateBar() {
     $('barText').textContent = 'Book ' + range + ' (' + hrs(sel.length) + ') for:';
     const who = $('barWho'), keep = who.value;
     who.innerHTML = '<option value="">Choose a name</option>' + state.artists.map((n) => '<option>' + esc(n) + '</option>').join('');
-    who.value = state.artists.indexOf(keep) !== -1 ? keep : (sel.every((x) => x.artist && x.artist === sel[0].artist) ? sel[0].artist : '');
-    $('barWhoRow').hidden = false;
-    $('barRemove').hidden = !sel.some((x) => x.artist);
+    who.value = state.artists.indexOf(keep) !== -1 ? keep : (!sel[0].virtual && sel.every((x) => x.artist && x.artist === sel[0].artist) ? sel[0].artist : '');
+    $('barWhoRow').hidden = false; $('barNoteRow').hidden = true;
+    $('barRemove').hidden = sel[0].virtual ? !sel.some((x) => x.names.length) : !sel.some((x) => x.artist);
+    $('barRemove').textContent = sel[0].virtual ? 'Remove this person' : 'Remove';
+    if (sel[0].virtual) $('barText').textContent = 'Art Walk ' + range + ' (' + hrs(sel.length) + '). Add or remove:';
     go.textContent = state.busy ? 'Saving…' : 'Book';
     go.classList.remove('release'); go.classList.add('admin');
     go.disabled = state.busy;
@@ -505,9 +599,15 @@ function updateBar() {
   }
   $('barWhoRow').hidden = true; $('barRemove').hidden = true; go.classList.remove('admin');
   const releasing = kindOf(sel[0]) === 'mine';
+  $('barNoteRow').hidden = releasing;
   const range = fmtDay(sel[0].date) + ', ' + fmtTime(sel[0].start) + '–' + fmtTime(sel[sel.length - 1].end);
-  $('barText').textContent = (releasing ? 'Give up ' : 'Take ') + range + ' (' + hrs(sel.length) + ')';
-  go.textContent = state.busy ? 'Saving…' : releasing ? 'Give up' : 'Take ' + (sel.length === 1 ? 'it' : 'them');
+  if (sel[0].virtual) {
+    $('barText').textContent = (releasing ? 'Leave the Art Walk, ' : 'Join the Art Walk, ') + range + ' (' + hrs(sel.length) + ')';
+    go.textContent = state.busy ? 'Saving…' : releasing ? 'Leave' : 'Join';
+  } else {
+    $('barText').textContent = (releasing ? 'Give up ' : 'Take ') + range + ' (' + hrs(sel.length) + ')';
+    go.textContent = state.busy ? 'Saving…' : releasing ? 'Give up' : 'Take ' + (sel.length === 1 ? 'it' : 'them');
+  }
   go.classList.toggle('release', releasing);
   go.disabled = state.busy;
   $('bar').hidden = false;
@@ -516,10 +616,27 @@ function updateBar() {
 async function adminBook(artist) {
   const sel = state.sel.map(find).filter(Boolean).sort(byTime);
   if (!sel.length || state.busy) return;
-  if (artist === null) { artist = $('barWho').value; if (!artist) { toast('Choose a name first.'); return; } }
+  let ids = sel.map((s) => s.id);
+  if (sel[0].virtual) {
+    const name = $('barWho').value;
+    if (!name) { toast(artist === '' ? 'Choose who to remove first.' : 'Choose a name first.'); return; }
+    if (artist === '') {
+      ids = []; sel.forEach((w) => w.seats.forEach((r) => { if (r.artist === name) ids.push(r.id); }));
+      if (!ids.length) { toast(name + ' isn\'t on those hours.'); return; }
+    } else {
+      artist = name; ids = [];
+      for (const w of sel) {
+        if (w.names.indexOf(name) !== -1) continue;
+        const free = w.seats.find((r) => !r.artist);
+        if (!free) { toast('The Art Walk is full at ' + fmtTime(w.start) + '.'); return; }
+        ids.push(free.id);
+      }
+      if (!ids.length) { toast(name + ' is already on those hours.'); return; }
+    }
+  } else if (artist === null) { artist = $('barWho').value; if (!artist) { toast('Choose a name first.'); return; } }
   state.busy = true; updateBar();
   try {
-    const data = await api('POST', { action: 'adminBook', shiftIds: sel.map((s) => s.id), artist, admin: state.adminPass });
+    const data = await api('POST', { action: 'adminBook', shiftIds: ids, artist, admin: state.adminPass });
     state.busy = false;
     if (!data.ok) { toast(data.error); return; }
     apply(data); state.sel = []; render();
@@ -534,13 +651,20 @@ async function submit() {
   const sel = state.sel.map(find).filter(Boolean).sort(byTime);
   if (!sel.length || state.busy) return;
   const action = kindOf(sel[0]) === 'mine' ? 'release' : 'claim';
+  const ids = sel.map((s) => !s.virtual ? s.id
+    : action === 'claim' ? (s.seats.find((r) => !r.artist) || {}).id
+    : (s.seats.find((r) => r.artist === state.me) || {}).id).filter(Boolean);
+  if (ids.length !== sel.length) { toast('One of those hours just filled up. Tap refresh and try again.'); return; }
   state.busy = true; updateBar();
   try {
-    const data = await api('POST', { action, shiftIds: sel.map((s) => s.id), artist: state.me });
+    const note = action === 'claim' ? $('barNote').value.trim() : '';
+    const data = await api('POST', { action, shiftIds: ids, artist: state.me, note });
+    if (data.ok) $('barNote').value = '';
     state.busy = false;
     if (!data.ok) { toast(data.error); state.sel = []; return load(); }
     apply(data); state.sel = []; render();
-    toast(action === 'claim' ? 'Thanks! Your hours are on the calendar.' : 'Done. Those hours are open again.');
+    toast(sel[0].virtual ? (action === 'claim' ? 'Thanks! You\'re on the Art Walk.' : 'Done. You\'re off those Art Walk hours.')
+      : action === 'claim' ? 'Thanks! Your hours are on the calendar.' : 'Done. Those hours are open again.');
   } catch (e) {
     state.busy = false; toast('Something went wrong. Please try again.'); updateBar();
   }
@@ -571,7 +695,7 @@ function openEditor(date) {
   hourOptions($('hStart'), 7, 20, hrsR[0]); hourOptions($('hEnd'), 8, 22, hrsR[1]);
   const walk = 'walk' in sp ? sp.walk : def.walk;
   $('walkOn').checked = !!walk;
-  const w = walk || [17, 21];
+  const w = walk || [17, 20];
   hourOptions($('wStart'), 15, 21, w[0]); hourOptions($('wEnd'), 16, 23, w[1]);
   $('edNote').value = sp.note || '';
   syncEditor();
@@ -660,7 +784,7 @@ document.querySelector('.tabs').onclick = (e) => {
   render();
 };
 $('list').onclick = (e) => { const b = e.target.closest('button.chip'); if (b && !b.disabled) tap(b.dataset.id); };
-$('barClear').onclick = () => { state.sel = []; render(); };
+$('barClear').onclick = () => { state.sel = []; $('barNote').value = ''; render(); };
 $('barGo').onclick = submit;
 $('barRemove').onclick = () => adminBook('');
 $('adminLink').onclick = (e) => {
