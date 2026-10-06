@@ -109,6 +109,8 @@
   .panel .btns button { flex: 1; }
   .panel .cancel { background: var(--bg); color: var(--text); border: 1px solid var(--line); }
   .panel .save { background: var(--walk); color: var(--on-brand); font-weight: 600; }
+  .more { display: block; width: 100%; margin-top: 12px; background: var(--card); color: var(--brand); border: 1px solid var(--line); font-weight: 600; }
+  .more.less { background: transparent; border: 0; color: var(--muted); font-weight: 400; margin-top: 4px; }
   .empty { color: var(--muted); text-align: center; padding: 24px 0; }
   footer { font-size: 14px; color: var(--muted); text-align: center; margin-top: 24px; }
   footer a { color: var(--brand); }
@@ -223,7 +225,7 @@ const store = {
   set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} },
   del(k) { try { localStorage.removeItem(k); } catch (e) {} }
 };
-const state = { passcode: store.get('rota_pass'), me: store.get('rota_name'), shifts: [], artists: [], filter: 'all', sel: [], busy: false, dayInfo: {}, admin: false, editing: null };
+const state = { passcode: store.get('rota_pass'), me: store.get('rota_name'), shifts: [], artists: [], filter: 'all', sel: [], busy: false, dayInfo: {}, admin: false, editing: null, weeks: 4 };
 
 /* ---------- helpers ---------- */
 const pad = (n) => String(n).padStart(2, '0');
@@ -459,9 +461,10 @@ function render() {
   Object.keys(state.dayInfo).forEach((d) => { if (state.dayInfo[d].closed && d >= todayIso && !days[d]) days[d] = []; });
   if (state.admin) Object.keys(state.specials || {}).forEach((d) => { if (d >= todayIso && !days[d]) days[d] = []; });
   // Show this week and the three after it (weeks run Sunday to Saturday)
-  const until = weekStart(todayIso); until.setDate(until.getDate() + 28);
+  const until = weekStart(todayIso); until.setDate(until.getDate() + 7 * state.weeks);
   const lastDay = iso(until);
-  const dates = Object.keys(days).sort().filter((d) => d < lastDay).filter((d) =>
+  const moreLater = state.filter !== 'mine' && Object.keys(days).some((d) => d >= lastDay);
+  const dates = Object.keys(days).sort().filter((d) => d < lastDay || state.filter === 'mine').filter((d) =>
     (state.filter === 'all') ||
     (state.filter === 'open' && (days[d].some((s) => !isWalk(s) && !s.artist) || state.walkHours.some((w) => w.date === d && walkShort(w) > 0))) ||
     (state.filter === 'mine' && days[d].some((s) => s.artist === state.me)));
@@ -531,7 +534,9 @@ function render() {
       dayNotes(rows) +
       '</section>';
   });
-  $('list').innerHTML = html + '</div>';
+  $('list').innerHTML = html + '</div>' +
+    (moreLater ? '<button class="more" id="moreWeeks">Show 4 more weeks</button>' : '') +
+    (state.weeks > 4 ? '<button class="more less" id="fewerWeeks">Back to 4 weeks</button>' : '');
   updateBar();
   show('mainView');
 }
@@ -783,6 +788,10 @@ document.querySelector('.tabs').onclick = (e) => {
   document.querySelectorAll('.tabs button').forEach((x) => x.classList.toggle('on', x === b));
   render();
 };
+$('list').addEventListener('click', (e) => {
+  if (e.target.id === 'moreWeeks') { state.weeks += 4; render(); }
+  if (e.target.id === 'fewerWeeks') { state.weeks = 4; render(); window.scrollTo(0, 0); }
+});
 $('list').onclick = (e) => { const b = e.target.closest('button.chip'); if (b && !b.disabled) tap(b.dataset.id); };
 $('barClear').onclick = () => { state.sel = []; $('barNote').value = ''; render(); };
 $('barGo').onclick = submit;
