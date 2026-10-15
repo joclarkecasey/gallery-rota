@@ -163,8 +163,8 @@
 
 <main>
   <section id="loginView" hidden>
-    <label for="passcode">Studio passcode</label>
-    <input id="passcode" type="password" autocomplete="current-password">
+    <label for="passcode">Your email</label>
+    <input id="passcode" type="email" autocomplete="email" inputmode="email" autocapitalize="off" placeholder="the address the gallery has for you">
     <button class="primary" id="loginBtn">Continue</button>
     <p id="loginError" class="error"></p>
   </section>
@@ -246,7 +246,7 @@
 
 <script>
 // ▼▼▼ Paste the Apps Script web app address between the quotes ▼▼▼
-const API_URL = 'https://script.google.com/macros/s/AKfycbzfHGhO4MVcwD_7wzLQdqlRuieKmI7UM94pW1PsWjqt401JYJIg4a4Fx-mCfglAb3fc/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbxmnS8-IoHPpL3ueKvNrhween-Rfyr7tIOo1ni70Zeyw_IEkjbB2N5bPgTlUy7QFTWi0w/exec';
 // ▲▲▲  (Until then the page runs as a preview with example names.)
 
 const DEMO = !/^https:\/\//.test(API_URL);
@@ -256,7 +256,7 @@ const store = {
   set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} },
   del(k) { try { localStorage.removeItem(k); } catch (e) {} }
 };
-const state = { passcode: store.get('rota_pass'), me: store.get('rota_name'), shifts: [], artists: [], filter: 'all', sel: [], busy: false, dayInfo: {}, admin: false, editing: null, weeks: 4 };
+const state = { passcode: store.get('rota_email'), me: store.get('rota_name'), shifts: [], artists: [], filter: 'all', sel: [], busy: false, dayInfo: {}, admin: false, editing: null, weeks: 4 };
 
 /* ---------- helpers ---------- */
 const pad = (n) => String(n).padStart(2, '0');
@@ -465,11 +465,10 @@ async function api(method, payload) {
   if (DEMO) return demoApi(method, payload);
   let res;
   if (method === 'GET') {
-    res = await fetch(API_URL + '?passcode=' + encodeURIComponent(state.passcode));
-  } else {
-    // Sent as plain text so the browser talks straight to Google without an extra check
-    res = await fetch(API_URL, { method: 'POST', body: JSON.stringify(Object.assign({ passcode: state.passcode }, payload)) });
+    payload = { action: 'list' };
   }
+  // Sent as plain text so the browser talks straight to Google without an extra check
+  res = await fetch(API_URL, { method: 'POST', body: JSON.stringify(Object.assign({ email: state.passcode }, payload)) });
   return res.json();
 }
 
@@ -493,14 +492,16 @@ async function load() {
   try {
     const data = await api('GET');
     if (!data.ok) {
-      if (data.error === 'passcode') {
-        store.del('rota_pass'); state.passcode = '';
-        $('loginError').textContent = 'That passcode didn\'t work. Check it and try again.';
+      if (data.error === 'email' || data.error === 'passcode') {
+        store.del('rota_email'); state.passcode = '';
+        $('loginError').textContent = 'We don\'t recognise that email. Check it, or ask Nadia to add it to the rota.';
         return show('loginView');
       }
       throw new Error(data.error);
     }
     apply(data);
+    // first sign-in on this device: the email tells us who you are
+    if ((!state.me || state.artists.indexOf(state.me) === -1) && data.me) { state.me = data.me; store.set('rota_name', data.me); }
     if (!state.me || state.artists.indexOf(state.me) === -1) return askName();
     state.sel = state.sel.filter((id) => find(id));
     render();
@@ -833,7 +834,7 @@ function syncEditor() {
   if (bad) { warn.textContent = 'The closing time needs to be after the opening time.'; warn.hidden = false; }
   else if (names.length) {
     warn.textContent = 'This closes hours already booked by ' + names.map((n) => n + ' (' + who[n].join(', ') + ')').join(', ') +
-      '. They\'ll get an email. If you change it back later, their bookings come back.';
+      '. If you change it back later, their bookings come back.';
     warn.hidden = false;
   } else warn.hidden = true;
   $('edSave').disabled = bad;
@@ -891,9 +892,9 @@ async function saveDay() {
 
 /* ---------- buttons ---------- */
 $('loginBtn').onclick = () => {
-  state.passcode = $('passcode').value.trim();
-  if (!state.passcode) return;
-  store.set('rota_pass', state.passcode); $('loginError').textContent = ''; load();
+  state.passcode = $('passcode').value.trim().toLowerCase();
+  if (!state.passcode || state.passcode.indexOf('@') === -1) { $('loginError').textContent = 'Type your email address.'; return; }
+  store.set('rota_email', state.passcode); store.del('rota_name'); state.me = ''; $('loginError').textContent = ''; load();
 };
 $('passcode').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('loginBtn').click(); });
 $('nameBtn').onclick = () => {
