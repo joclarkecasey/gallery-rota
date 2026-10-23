@@ -504,27 +504,56 @@ function apply(data) {
   else note.hidden = true;
 }
 
+// The last rota this phone saw, so a return visit shows something straight away while it refreshes.
+function savedRota() {
+  try { const c = JSON.parse(store.get('rota_cache') || 'null'); return c && c.email === state.passcode && c.data && c.data.ok ? c : null; }
+  catch (e) { return null; }
+}
+function saveRota(data) {
+  if (DEMO || !data || !data.ok || !state.passcode) return;
+  store.set('rota_cache', JSON.stringify({ email: state.passcode, at: Date.now(), data }));
+}
+
 async function load() {
   if (DEMO) { state.passcode = 'demo'; if (!state.me) state.me = 'Jo (you)'; }
   if (!state.passcode) return show('loginView');
-  show('loading');
+  const saved = savedRota();
+  let early = false;
+  if (saved && !state.admin && state.me) {
+    try {
+      apply(saved.data);
+      if (state.artists.indexOf(state.me) !== -1) {
+        state.sel = state.sel.filter((id) => find(id));
+        render(); early = true;
+        $('note').textContent = 'Updating…'; $('note').hidden = false;
+      }
+    } catch (e) { early = false; }
+  }
+  if (!early) show('loading');
   try {
     const data = await api('GET');
     if (!data.ok) {
       if (data.error === 'email' || data.error === 'passcode') {
-        store.del('rota_email'); state.passcode = '';
+        store.del('rota_email'); store.del('rota_cache'); state.passcode = '';
         $('loginError').textContent = 'We don\'t recognise that email. Check it, or ask Nadia to add it to the rota.';
         return show('loginView');
       }
       throw new Error(data.error);
     }
     apply(data);
+    saveRota(data);
     // first sign-in on this device: the email tells us who you are
     if ((!state.me || state.artists.indexOf(state.me) === -1) && data.me) { state.me = data.me; store.set('rota_name', data.me); }
     if (!state.me || state.artists.indexOf(state.me) === -1) return askName();
     state.sel = state.sel.filter((id) => find(id));
     render();
   } catch (e) {
+    if (early) {
+      const mins = Math.max(1, Math.round((Date.now() - saved.at) / 60000));
+      $('note').textContent = 'Couldn\'t refresh. Showing the rota from ' + (mins < 60 ? mins + ' min' : Math.round(mins / 60) + ' hr') + ' ago. Tap Refresh to try again.';
+      $('note').hidden = false;
+      return;
+    }
     $('loading').textContent = 'Couldn\'t load the rota. Check your connection and tap refresh. (' + e.message + ')';
     show('loading');
   }
@@ -817,7 +846,7 @@ async function submit() {
     if (data.ok) { $('barNote').value = ''; $('barFor').value = ''; }
     state.busy = false;
     if (!data.ok) { toast(data.error); state.sel = []; return load(); }
-    apply(data); state.sel = []; render();
+    apply(data); saveRota(data); state.sel = []; render();
     toast(sel[0].virtual ? (action === 'claim' ? 'Thanks! You\'re on the ' + sel[0].type + '.' : 'Done. You\'re off the ' + sel[0].type + '.')
       : action === 'claim' ? (subBy ? 'Thanks! Booked for ' + artist + ', with you subbing. It\'s on the calendar.' : 'Thanks! Your hours are on the calendar.') : 'Done. Those hours are open again.');
   } catch (e) {
