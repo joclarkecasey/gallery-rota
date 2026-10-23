@@ -50,7 +50,7 @@
   .primary { background: var(--brand); color: var(--on-brand); width: 100%; margin-top: 16px; font-weight: 600; }
   .error { color: var(--brand); margin-top: 10px; }
 
-  .summary { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+  .summary { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; font-size: 13px; line-height: 1.35; }
   .summary strong { color: var(--brand); }
   .howto { font-size: 14px; color: var(--muted); margin: 8px 2px 12px; }
   .tabs { display: flex; gap: 6px; margin-bottom: 4px; }
@@ -136,7 +136,9 @@
   .bar p { margin: 0 auto 10px; max-width: 528px; font-weight: 600; }
   .bar div { display: flex; gap: 8px; max-width: 528px; margin: 0 auto; }
   .bar button { flex: 1; }
-  #barWhoRow, #barNoteRow { margin-bottom: 8px; }
+  #barWhoRow, #barNoteRow, #barForRow { margin-bottom: 8px; }
+  #barFor { padding: 10px; font-size: 15px; width: 100%; }
+  .monthline { margin-bottom: 2px; }
   #barNote { padding: 10px; font-size: 15px; }
   .notes { margin: 8px 2px 0; font-size: 13px; color: var(--muted); display: grid; gap: 2px; }
   .notes span { color: var(--text); }
@@ -206,7 +208,8 @@
 <div class="bar" id="bar" hidden>
   <p id="barText"></p>
   <div id="barWhoRow" hidden><select id="barWho" aria-label="Book for"></select></div>
-  <div id="barNoteRow" hidden><input id="barNote" maxlength="100" placeholder="Add a note (optional), e.g. covering for Gerry" aria-label="Note"></div>
+  <div id="barForRow" hidden><select id="barFor" aria-label="Who are these hours for?"></select></div>
+  <div id="barNoteRow" hidden><input id="barNote" maxlength="100" placeholder="Add a note (optional)" aria-label="Note"></div>
   <div><button class="clear" id="barClear">Clear</button><button class="clear" id="barRemove" hidden>Remove</button><button class="go" id="barGo">Take</button></div>
 </div>
 <div class="overlay" id="editor" hidden>
@@ -246,7 +249,7 @@
 
 <script>
 // ▼▼▼ Paste the Apps Script web app address between the quotes ▼▼▼
-const API_URL = 'https://script.google.com/macros/s/AKfycbxmnS8-IoHPpL3ueKvNrhween-Rfyr7tIOo1ni70Zeyw_IEkjbB2N5bPgTlUy7QFTWi0w/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbyZssXwKGWWEN367-Tm0_S4Z6-EUwSmbXtvTDWTgfBddQGjvVh8PH6Wb2kARlv3JF8I9w/exec';
 // ▲▲▲  (Until then the page runs as a preview with example names.)
 
 const DEMO = !/^https:\/\//.test(API_URL);
@@ -273,13 +276,16 @@ const isGroup = (s) => s.type !== GALLERY;   // Art Walk and other events: sever
 const isWalk = isGroup;
 const find = (id) => state.shifts.find((s) => s.id === id) || (state.units || []).find((s) => s.id === id);
 // Event slots: 'mine', 'open' (still short), 'room' (enough, space for more) or 'taken' (full)
+// Hours I'm sitting for someone else: booked under their name, note starts "<me> subbing".
+function isMySub(s) { return !!state.me && !s.virtual && !!s.artist && s.artist !== state.me && String(s.note || '').indexOf(state.me + ' subbing') === 0; }
+function isMine(s) { return s.artist === state.me || isMySub(s); }
 function kindOf(s) {
   if (s.virtual) {
     if (s.names.indexOf(state.me) !== -1) return 'mine';
     if (s.names.length < s.needed) return 'open';
     return s.names.length < s.seats.length ? 'room' : 'taken';
   }
-  return !s.artist ? 'open' : s.artist === state.me ? 'mine' : 'taken';
+  return !s.artist ? 'open' : isMine(s) ? 'mine' : 'taken';
 }
 // Groups event rows into slots people join: one per hour, or one for the whole event.
 function buildUnits() {
@@ -452,12 +458,24 @@ function demoApi(method, p) {
           }
         }
         if (chosen.some((c) => c.artist && c.artist !== p.artist)) return { ok: false, error: 'Sorry, someone just took one of those hours.' };
-        chosen.forEach((c) => { c.artist = p.artist; c.note = p.note || ''; });
+        const tag = p.subBy && p.subBy !== p.artist ? p.subBy + ' subbing' : '';
+        chosen.forEach((c) => { c.artist = p.artist; c.note = tag ? tag + (p.note ? ' – ' + p.note : '') : (p.note || ''); });
       } else chosen.forEach((c) => { if (c.artist === p.artist) { c.artist = ''; c.note = ''; } });
     }
   }
   return { ok: true, artists: demo.artists.slice(), shifts: demo.shifts.map((s) => Object.assign({}, s)), days: demo.info(), walkNeeded: 3,
-           specials: JSON.parse(JSON.stringify(demo.special)), demo: true };
+           specials: JSON.parse(JSON.stringify(demo.special)), demo: true, month: demoMonth() };
+}
+// Preview only: this month's figures worked out from the example names (1 hr "done" earlier in the month).
+function demoMonth() {
+  const now = new Date(), ym = iso(now).slice(0, 7), hours = {}; let open = 0;
+  demo.shifts.forEach((s) => {
+    if (s.type !== 'Gallery' || s.date.slice(0, 7) !== ym) return;
+    if (!s.artist) { open++; return; }
+    (hours[s.artist] = hours[s.artist] || { done: 0, booked: 0 }).booked++;
+  });
+  (hours['Jo (you)'] = hours['Jo (you)'] || { done: 0, booked: 0 }).done = 1;
+  return { label: now.toLocaleDateString('en-US', { month: 'long' }), hours, open, noMinimum: [], minimum: 4 };
 }
 
 /* ---------- talking to the sheet ---------- */
@@ -478,6 +496,7 @@ function apply(data) {
   state.dayInfo = data.days || {};
   state.specials = data.specials || {};
   if (data.pattern) state.pattern = data.pattern;
+  state.month = data.month || null;
   buildUnits();
   const note = $('note');
   if (data.demo) { note.textContent = 'Preview with example names. Not connected to the sheet or calendar yet.'; note.hidden = false; }
@@ -519,6 +538,26 @@ function askName() {
   show('nameView');
 }
 
+/* ---------- this month, at the top ---------- */
+function numH(n) { const r = Math.round(n * 10) / 10; return r + (r === 1 ? ' hr' : ' hrs'); }
+function monthLine() {
+  const m = state.month;
+  if (!m || state.admin) return '';
+  let html = '';
+  if (state.me) {
+    const h = (m.hours || {})[state.me] || { done: 0, booked: 0 };
+    const total = h.done + h.booked;
+    const exempt = (m.noMinimum || []).indexOf(state.me) !== -1;
+    const min = m.minimum || 4;
+    const status = exempt ? ''
+      : total >= min ? ' · <strong>' + min + '-hr minimum met&nbsp;✓</strong>'
+      : ' · <strong>needs ' + numH(min - total) + ' more</strong>';
+    html += '<div class="monthline"><b>' + esc(m.label) + ':</b> ' + numH(h.done) + ' done · ' + numH(h.booked) + ' booked' + status + '</div>';
+  }
+  html += '<div class="monthline">' + (m.open ? '<strong>' + numH(m.open) + ' still open</strong> in ' + esc(m.label) : 'Every gallery hour in ' + esc(m.label) + ' is covered') + '.</div>';
+  return html;
+}
+
 /* ---------- drawing the rota ---------- */
 function render() {
   $('me').textContent = state.me;
@@ -530,8 +569,8 @@ function render() {
   const openUnits = state.shifts.filter((s) => !isGroup(s) && !s.artist).concat(state.units.filter((w) => walkShort(w) > 0));
   const soonOpen = openUnits.filter((s) => (toDate(s.date) - now) / 86400000 < 14).length;
   const allOpen = openUnits.filter((s) => (toDate(s.date) - now) / 86400000 < 28).length;
-  const mine = state.shifts.filter((s) => s.artist === state.me).length;
-  $('summary').innerHTML = (soonOpen
+  const mine = state.shifts.filter(isMine).length;
+  $('summary').innerHTML = monthLine() + (soonOpen
     ? '<strong>' + hrs(soonOpen) + ' open</strong> in the next two weeks'
     : allOpen ? 'The next two weeks are covered. <strong>' + hrs(allOpen) + ' open</strong> later on' : 'Every hour is covered')
     + '. You have ' + hrs(mine) + ' coming up.';
@@ -548,7 +587,7 @@ function render() {
   const dates = Object.keys(days).sort().filter((d) => d < lastDay || state.filter === 'mine').filter((d) =>
     (state.filter === 'all') ||
     (state.filter === 'open' && (days[d].some((s) => !isGroup(s) && !s.artist) || state.units.some((w) => w.date === d && walkShort(w) > 0))) ||
-    (state.filter === 'mine' && days[d].some((s) => s.artist === state.me)));
+    (state.filter === 'mine' && days[d].some(isMine)));
 
   if (!dates.length) {
     $('list').innerHTML = '<p class="empty">' + (state.filter === 'mine' ? 'You haven\'t taken any hours yet.' : state.filter === 'open' ? 'Every hour is covered.' : 'No hours set up yet.') + '</p>';
@@ -583,7 +622,7 @@ function render() {
   const chip = (s) => {
     const k = kindOf(s);
     const sel = state.sel.indexOf(s.id) !== -1;
-    const name = k === 'open' ? 'Open' : k === 'mine' ? 'You' : firstName(s.artist);
+    const name = k === 'open' ? 'Open' : isMySub(s) ? 'For ' + firstName(s.artist) : k === 'mine' ? 'You' : firstName(s.artist);
     const hour = fmtTime(s.start).replace(':00', '');
     return '<button class="chip ' + k + (sel ? ' sel' : '') + '" data-id="' + esc(s.id) + '"' +
       (k === 'taken' && !state.admin ? ' disabled' : ' aria-pressed="' + sel + '"') +
@@ -699,6 +738,14 @@ function updateBar() {
   $('barWhoRow').hidden = true; $('barRemove').hidden = true; go.classList.remove('admin');
   const releasing = kindOf(sel[0]) === 'mine';
   $('barNoteRow').hidden = releasing;
+  const canSub = !releasing && !sel[0].virtual && !!state.me;
+  $('barForRow').hidden = !canSub;
+  if (canSub) {
+    const f = $('barFor'), keep = f.value;
+    const others = state.artists.filter((n) => n !== state.me);
+    f.innerHTML = '<option value="">For myself</option>' + others.map((n) => '<option value="' + esc(n) + '">Subbing for ' + esc(n) + '</option>').join('');
+    f.value = others.indexOf(keep) !== -1 ? keep : '';
+  }
   const range = fmtDay(sel[0].date) + ', ' + fmtTime(sel[0].start) + '–' + fmtTime(sel[sel.length - 1].end);
   if (sel[0].virtual) {
     $('barText').textContent = (releasing ? 'Leave ' : 'Join ') + sel[0].type + ', ' + range + (sel[0].mode === 'hour' ? ' (' + hrs(sel.length) + ')' : '');
@@ -757,13 +804,22 @@ async function submit() {
   state.busy = true; updateBar();
   try {
     const note = action === 'claim' ? $('barNote').value.trim() : '';
-    const data = await api('POST', { action, shiftIds: ids, artist: state.me, note });
-    if (data.ok) $('barNote').value = '';
+    // Subbing: book under the covered artist's name (their hours), and say who is sitting.
+    let artist = state.me, subBy = '';
+    if (action === 'claim' && !sel[0].virtual && $('barFor').value) { artist = $('barFor').value; subBy = state.me; }
+    if (action === 'release' && !sel[0].virtual) {
+      if (sel.some((s) => s.artist !== sel[0].artist)) { state.busy = false; toast('Give up your own hours and hours you\'re subbing separately.'); updateBar(); return; }
+      if (isMySub(sel[0])) { artist = sel[0].artist; subBy = state.me; }
+    }
+    const payload = { action, shiftIds: ids, artist, note };
+    if (subBy) payload.subBy = subBy;
+    const data = await api('POST', payload);
+    if (data.ok) { $('barNote').value = ''; $('barFor').value = ''; }
     state.busy = false;
     if (!data.ok) { toast(data.error); state.sel = []; return load(); }
     apply(data); state.sel = []; render();
     toast(sel[0].virtual ? (action === 'claim' ? 'Thanks! You\'re on the ' + sel[0].type + '.' : 'Done. You\'re off the ' + sel[0].type + '.')
-      : action === 'claim' ? 'Thanks! Your hours are on the calendar.' : 'Done. Those hours are open again.');
+      : action === 'claim' ? (subBy ? 'Thanks! Booked for ' + artist + ', with you subbing. It\'s on the calendar.' : 'Thanks! Your hours are on the calendar.') : 'Done. Those hours are open again.');
   } catch (e) {
     state.busy = false; toast('Something went wrong. Please try again.'); updateBar();
   }
@@ -915,7 +971,7 @@ $('list').addEventListener('click', (e) => {
   if (e.target.id === 'fewerWeeks') { state.weeks = 4; render(); window.scrollTo(0, 0); }
 });
 $('list').onclick = (e) => { const b = e.target.closest('button.chip'); if (b && !b.disabled) tap(b.dataset.id); };
-$('barClear').onclick = () => { state.sel = []; $('barNote').value = ''; render(); };
+$('barClear').onclick = () => { state.sel = []; $('barNote').value = ''; $('barFor').value = ''; render(); };
 $('barGo').onclick = submit;
 $('barRemove').onclick = () => adminBook('');
 $('adminTop').onclick = (e) => {
