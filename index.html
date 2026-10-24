@@ -76,6 +76,7 @@
           border-radius: 8px; border: 1px solid var(--line); background: var(--sunk); color: var(--text); font-size: 12px; line-height: 1.25; }
   .chip .h { font-weight: 600; font-variant-numeric: tabular-nums; }
   .chip .n { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+  .chip .n .for { display: block; font-size: 10px; line-height: 1.1; }
   .chip:disabled { cursor: default; }
   .chip.open { background: var(--brand-soft); border-color: var(--brand); }
   .chip.open .n { color: var(--brand); font-weight: 600; }
@@ -376,7 +377,7 @@ const demo = DEMO ? (() => {
   if (t) shifts.filter((s) => s.date === t.date && s.artist === t.artist).forEach((s) => { s.artist = 'Jo (you)'; });
   // an example note
   const n = shifts.find((s) => s.artist && s.artist !== 'Jo (you)' && s.type === 'Gallery');
-  if (n) shifts.filter((s) => s.date === n.date && s.artist === n.artist).forEach((s) => { s.note = 'covering for Gerry'; });
+  if (n) shifts.filter((s) => s.date === n.date && s.artist === n.artist).forEach((s) => { s.note = 'may be 10 mins late'; });
 
   function setDay(date, sp) {
     if (sp) special[date] = sp; else delete special[date];
@@ -475,6 +476,7 @@ function demoMonth() {
     (hours[s.artist] = hours[s.artist] || { done: 0, booked: 0 }).booked++;
   });
   (hours['Jo (you)'] = hours['Jo (you)'] || { done: 0, booked: 0 }).done = 1;
+  demo.shifts.forEach((s) => { if (s.type !== 'Gallery' && s.artist === 'Jo (you)' && s.date.slice(0, 7) === ym) hours['Jo (you)'].events = (hours['Jo (you)'].events || 0) + 1; });
   return { label: now.toLocaleDateString('en-US', { month: 'long' }), hours, open, noMinimum: [], minimum: 4 };
 }
 
@@ -581,7 +583,8 @@ function monthLine() {
     const status = exempt ? ''
       : total >= min ? ' · <strong>' + min + '-hr minimum met&nbsp;✓</strong>'
       : ' · <strong>needs ' + numH(min - total) + ' more</strong>';
-    html += '<div class="monthline"><b>' + esc(m.label) + ':</b> ' + numH(h.done) + ' done · ' + numH(h.booked) + ' booked' + status + '</div>';
+    html += '<div class="monthline"><b>' + esc(m.label) + ' gallery sitting:</b> ' + numH(h.done) + ' done · ' + numH(h.booked) + ' booked' + status + '</div>';
+    if (h.events) html += '<div class="monthline"><b>Art Walk &amp; events:</b> ' + numH(h.events) + ', on top of your gallery hours</div>';
   }
   html += '<div class="monthline">' + (m.open ? '<strong>' + numH(m.open) + ' still open</strong> in ' + esc(m.label) : 'Every gallery hour in ' + esc(m.label) + ' is covered') + '.</div>';
   return html;
@@ -656,7 +659,7 @@ function render() {
     return '<button class="chip ' + k + (sel ? ' sel' : '') + '" data-id="' + esc(s.id) + '"' +
       (k === 'taken' && !state.admin ? ' disabled' : ' aria-pressed="' + sel + '"') +
       ' aria-label="' + esc(fmtDay(s.date) + ' ' + fmtTime(s.start) + ' to ' + fmtTime(s.end) + ': ' + (k === 'taken' ? s.artist : name)) + '">' +
-      '<span class="h">' + hour + '</span><span class="n">' + esc(name) + '</span></button>';
+      '<span class="h">' + hour + '</span><span class="n">' + (isMySub(s) ? '<span class="for">for</span>' + esc(firstName(s.artist)) : esc(name)) + '</span></button>';
   };
 
   const thisWeek = weekStart(todayIso).toDateString();
