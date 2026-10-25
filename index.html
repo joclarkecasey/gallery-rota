@@ -140,6 +140,7 @@
   #barWhoRow, #barNoteRow, #barForRow { margin-bottom: 8px; }
   #barFor { padding: 10px; font-size: 15px; width: 100%; }
   .monthline { margin-bottom: 2px; }
+  .summary .mhead { font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--brand); margin: 2px 0 4px; }
   #barNote { padding: 10px; font-size: 15px; }
   .notes { margin: 8px 2px 0; font-size: 13px; color: var(--muted); display: grid; gap: 2px; }
   .notes span { color: var(--text); }
@@ -476,7 +477,7 @@ function demoMonth() {
     (hours[s.artist] = hours[s.artist] || { done: 0, booked: 0 }).booked++;
   });
   (hours['Jo (you)'] = hours['Jo (you)'] || { done: 0, booked: 0 }).done = 1;
-  demo.shifts.forEach((s) => { if (s.type !== 'Gallery' && s.artist === 'Jo (you)' && s.date.slice(0, 7) === ym) hours['Jo (you)'].events = (hours['Jo (you)'].events || 0) + 1; });
+  demo.shifts.forEach((s) => { if (s.type !== 'Gallery' && s.artist === 'Jo (you)' && s.date.slice(0, 7) === ym) { const k = s.type === 'Art Walk' ? 'walkBooked' : 'events'; hours['Jo (you)'][k] = (hours['Jo (you)'][k] || 0) + 1; } });
   return { label: now.toLocaleDateString('en-US', { month: 'long' }), hours, open, noMinimum: [], minimum: 4 };
 }
 
@@ -576,17 +577,20 @@ function monthLine() {
   if (!m || state.admin) return '';
   let html = '';
   if (state.me) {
-    const h = (m.hours || {})[state.me] || { done: 0, booked: 0 };
-    const total = h.done + h.booked;
+    const h = Object.assign({ done: 0, booked: 0, walkDone: 0, walkBooked: 0, events: 0, subbed: 0 }, (m.hours || {})[state.me] || {});
+    // Required hours = gallery sitting + Art Walk. Subbing for others and other events are extra.
+    const done = h.done + h.walkDone, booked = h.booked + h.walkBooked, total = done + booked;
     const exempt = (m.noMinimum || []).indexOf(state.me) !== -1;
     const min = m.minimum || 4;
-    const status = exempt ? ''
-      : total >= min ? ' · <strong>' + min + '-hr minimum met&nbsp;✓</strong>'
-      : ' · <strong>needs ' + numH(min - total) + ' more</strong>';
-    html += '<div class="monthline"><b>' + esc(m.label) + ' gallery sitting:</b> ' + numH(h.done) + ' done · ' + numH(h.booked) + ' booked' + status + '</div>';
-    if (h.events) html += '<div class="monthline"><b>Art Walk &amp; events:</b> ' + numH(h.events) + ', on top of your gallery hours</div>';
+    const plus = [];
+    if (h.subbed) plus.push(numH(h.subbed) + ' subbed');
+    if (h.events) plus.push(numH(h.events) + ' other events');
+    const t = Math.round(total * 10) / 10;
+    const end = exempt ? '' : total >= min ? ' · ' + t + ' hour total' : ' · <strong>' + numH(min - total) + ' needed</strong>';
+    html += '<h2 class="mhead">Hours this month</h2>';
+    html += '<div class="monthline"><b>' + (exempt ? 'Your hours:' : 'Required hours:') + '</b> ' + numH(done) + ' done + ' + numH(booked) + ' booked' + end + '</div>';
+    if (plus.length) html += '<div class="monthline">Plus ' + plus.join(' · ') + '</div>';
   }
-  html += '<div class="monthline">' + (m.open ? '<strong>' + numH(m.open) + ' still open</strong> in ' + esc(m.label) : 'Every gallery hour in ' + esc(m.label) + ' is covered') + '.</div>';
   return html;
 }
 
@@ -602,10 +606,9 @@ function render() {
   const soonOpen = openUnits.filter((s) => (toDate(s.date) - now) / 86400000 < 14).length;
   const allOpen = openUnits.filter((s) => (toDate(s.date) - now) / 86400000 < 28).length;
   const mine = state.shifts.filter(isMine).length;
-  $('summary').innerHTML = monthLine() + (soonOpen
-    ? '<strong>' + hrs(soonOpen) + ' open</strong> in the next two weeks'
-    : allOpen ? 'The next two weeks are covered. <strong>' + hrs(allOpen) + ' open</strong> later on' : 'Every hour is covered')
-    + '. You have ' + hrs(mine) + ' coming up.';
+  $('summary').innerHTML = monthLine() + '<div class="monthline">' + (soonOpen
+    ? '<strong>' + hrs(soonOpen) + ' open</strong> in the next two weeks.'
+    : allOpen ? 'The next two weeks are covered. <strong>' + hrs(allOpen) + ' open</strong> later on.' : 'Every hour is covered.') + '</div>';
 
   const days = {};
   state.shifts.forEach((s) => { (days[s.date] = days[s.date] || []).push(s); });
