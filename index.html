@@ -53,9 +53,6 @@
   .summary { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; font-size: 13px; line-height: 1.35; }
   .summary strong { color: var(--brand); }
   .howto { font-size: 14px; color: var(--muted); margin: 8px 2px 12px; }
-  .howto a { color: var(--brand); font-weight: 600; white-space: nowrap; }
-  .shoplink { font-size: 14px; color: var(--muted); text-align: center; margin: 24px 2px -12px; }
-  .shoplink a { color: var(--brand); font-weight: 600; white-space: nowrap; }
   .tabs { display: flex; gap: 6px; margin-bottom: 4px; }
   .tabs button { flex: 1; background: var(--card); border: 1px solid var(--line); color: var(--text); padding: 9px; }
   .tabs button.on { background: var(--brand); border-color: var(--brand); color: var(--on-brand); }
@@ -143,6 +140,7 @@
   #barWhoRow, #barNoteRow, #barForRow { margin-bottom: 8px; }
   #barFor { padding: 10px; font-size: 15px; width: 100%; }
   .monthline { margin-bottom: 2px; }
+  .howto a { color: var(--brand); font-weight: 600; white-space: nowrap; }
   .summary .mhead { font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--brand); margin: 2px 0 4px; }
   #barNote { padding: 10px; font-size: 15px; }
   .notes { margin: 8px 2px 0; font-size: 13px; color: var(--muted); display: grid; gap: 2px; }
@@ -174,6 +172,7 @@
     <input id="passcode" type="email" autocomplete="email" inputmode="email" autocapitalize="off" placeholder="the address the gallery has for you">
     <button class="primary" id="loginBtn">Continue</button>
     <p id="loginError" class="error"></p>
+    <p class="howto"><a href="/guide.html">How the rota app works</a></p>
   </section>
 
   <section id="nameView" hidden>
@@ -197,14 +196,13 @@
       <p><strong>Admin.</strong> Tap any hours to book them for someone (or remove a booking). Tap <em>Edit</em> on a day to change its hours, close it, or add an event (installation, take down, opening reception, Art Walk). To open on a day that's normally closed, add it here:</p>
       <div class="addrow"><input type="date" id="addDate" aria-label="Date to add"><button id="addBtn">Add day</button></div>
     </div>
-    <p class="howto">Tap an open hour, then the hours next to it, to take a block. Tap your own hours to give them up. <a href="/guide.html" target="_blank" rel="noopener">How the rota works</a></p>
+    <p class="howto">Tap an open hour, then the hours next to it, to take a block. Tap your own hours to give them up. <a href="/guide.html">How it works</a></p>
     <div class="tabs">
       <button data-f="all" class="on">All</button>
       <button data-f="open">Open</button>
       <button data-f="mine">Mine</button>
     </div>
     <div id="list"></div>
-    <p class="shoplink">Selling in the CACM Shop? <a href="https://app.puppetvendors.com/portal/userAuth/v2/1xia1c-ud/vendor/vendor" target="_blank" rel="noopener">Artist login</a> · <a href="https://cacm-shop-guide.vercel.app" target="_blank" rel="noopener">Shop Guide</a></p>
     <footer><span id="me" hidden></span><a href="#" id="changeName" hidden>change</a><a href="#" id="refresh">Refresh</a></footer>
   </section>
 
