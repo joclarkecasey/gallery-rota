@@ -144,6 +144,26 @@
   .summary .mgap { margin-top: 8px; }
   .shoplink { font-size: 14px; color: var(--muted); text-align: center; margin: 24px 2px -12px; }
   .shoplink a { color: var(--brand); font-weight: 600; white-space: nowrap; }
+  /* Hours tab: everyone's hours this month (and from 2027 the year so far and Art Walk) */
+  .hcard { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin-top: 10px; }
+  .hcard .mhead { font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--brand); margin: 0 0 4px; }
+  .hcard .hsub { font-size: 13px; color: var(--muted); margin: 0 0 10px; }
+  .htable { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
+  .htable th { text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); padding: 6px 3px; border-bottom: 1px solid var(--line); font-weight: 600; }
+  .htable td { padding: 7px 3px; border-bottom: 1px solid var(--line); }
+  .htable td:first-child { padding-left: 9px; }
+  .htable .num { text-align: center; }
+  .htable .st { font-weight: 600; white-space: nowrap; font-size: 13px; }
+  .htable .yr { color: var(--muted); }
+  .htable .awdone { color: var(--mine); font-weight: 600; }
+  .htable tr.me td:first-child { font-weight: 700; }
+  .htable tr.short .st { color: var(--brand); } .htable tr.short td:first-child { box-shadow: inset 3px 0 var(--brand); }
+  .htable tr.ok .st { color: var(--mine); } .htable tr.ok td:first-child { box-shadow: inset 3px 0 var(--mine); }
+  .htable tr.over .st { color: #8A5A12; } .htable tr.over td:first-child { box-shadow: inset 3px 0 #D89A3A; }
+  .hcard .hnote { font-size: 13px; color: var(--muted); background: var(--sunk); border-radius: 8px; padding: 8px 10px; margin-top: 10px; }
+  .hcard .small { font-size: 12px; color: var(--muted); margin-top: 8px; line-height: 1.4; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .htable tr.over .st { color: #E0B061; } }
+  :root[data-theme="dark"] .htable tr.over .st { color: #E0B061; }
   .summary .mhead { font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--brand); margin: 2px 0 4px; }
   #barNote { padding: 10px; font-size: 15px; }
   .notes { margin: 8px 2px 0; font-size: 13px; color: var(--muted); display: grid; gap: 2px; }
@@ -199,11 +219,12 @@
       <p><strong>Admin.</strong> Tap any hours to book them for someone (or remove a booking). Tap <em>Edit</em> on a day to change its hours, close it, or add an event (installation, take down, opening reception, Art Walk). To open on a day that's normally closed, add it here:</p>
       <div class="addrow"><input type="date" id="addDate" aria-label="Date to add"><button id="addBtn">Add day</button></div>
     </div>
-    <p class="howto">Tap an open hour, then the hours next to it, to take a block. Tap your own hours to give them up. <a href="/guide.html">How it works</a></p>
+    <p class="howto" id="howto">Tap an open hour, then the hours next to it, to take a block. Tap your own hours to give them up. <a href="/guide.html">How it works</a></p>
     <div class="tabs">
       <button data-f="all" class="on">All</button>
       <button data-f="open">Open</button>
       <button data-f="mine">Mine</button>
+      <button data-f="hours">Hours</button>
     </div>
     <div id="list"></div>
     <p class="shoplink">Selling in the CACM Shop? <a href="https://app.puppetvendors.com/portal/userAuth/v2/1xia1c-ud/vendor/vendor" target="_blank" rel="noopener">Artist login</a> · <a href="https://cacm-shop-guide.vercel.app" target="_blank" rel="noopener">Shop Guide</a></p>
@@ -478,8 +499,10 @@ function demoApi(method, p) {
 function demoMonth() { // preview only: example figures in the same shape the script sends
   const now = new Date();
   return { label: now.toLocaleDateString('en-US', { month: 'long' }), galleryHours: 66, minimum: 4, minimumHigh: 4, walkHours: 9, walkOpen: 3,
-    walkTarget: new Date().getFullYear() >= 2027 ? 6 : 0, noMinimum: [], next: null,
-    hours: { 'Jo (you)': { done: 2, booked: 1, subbed: 1, events: 2, walkYear: 3, nextBooked: 0 } } };
+    walkTarget: new Date().getFullYear() >= 2027 ? 3 : 0, walkEach: 3, yearly: new Date().getFullYear() >= 2027, yearTarget: 4, noMinimum: [],
+    next: { label: new Date(now.getFullYear(), now.getMonth() + 1, 15).toLocaleDateString('en-US', { month: 'long' }), gallery: 72, lo: 4, hi: 5 },
+    people: demo.artists.map((n) => ({ name: n, gallery: null, year: new Date().getFullYear() >= 2027 ? 4 : 0, walk: 3 })),
+    hours: Object.fromEntries(demo.artists.map((n, i) => [n, { done: i % 4, booked: (i * 3) % 5, walkYear: i % 4, year: i % 6, subbed: 0, events: 0, nextBooked: 0 }])) };
 }
 
 /* ---------- talking to the sheet ---------- */
@@ -577,6 +600,7 @@ function numH(n) { const r = Math.round(n * 10) / 10; return r + (r === 1 ? ' hr
 // Gallery sitting counts toward the monthly target; Art Walk has a yearly target; subbing and other events are extra.
 function hoursEach(f) { return f.minimum !== undefined ? (f.minimumHigh && f.minimumHigh !== f.minimum ? f.minimum + '–' + f.minimumHigh : String(f.minimum))
   : (f.hi && f.hi !== f.lo ? f.lo + '–' + f.hi : String(f.lo)); }
+function personOf(name) { return ((state.month || {}).people || []).find((x) => x.name === name); }
 function monthLine(openLine) {
   const m = state.month;
   if (!m || state.admin) return openLine;
@@ -587,22 +611,63 @@ function monthLine(openLine) {
   if (m.walkHours) line('<b>' + numH(m.walkHours).replace(/ hrs?$/, '') + ' Art Walk hours</b> · ' + (m.walkOpen ? '<strong>' + m.walkOpen + ' still open</strong>' : 'all covered'));
   if (state.me) {
     const h = Object.assign({ done: 0, booked: 0, events: 0, subbed: 0, walkYear: 0, nextBooked: 0 }, (m.hours || {})[state.me] || {});
-    const exempt = (m.noMinimum || []).indexOf(state.me) !== -1;
-    const min = m.minimum || 4, total = h.done + h.booked;
+    const p = personOf(state.me);
+    const exempt = p ? p.gallery === false : (m.noMinimum || []).indexOf(state.me) !== -1;
+    const min = p && typeof p.gallery === 'number' ? p.gallery : m.minimum || 4, total = h.done + h.booked;
     const end = exempt ? '' : total >= min ? ' · ' + (Math.round(total * 10) / 10) + ' hour total' : ' · <strong>' + numH(min - total) + ' needed</strong>';
     line('<b>Your gallery hours:</b> ' + (Math.round(h.done * 10) / 10) + ' done + ' + (Math.round(h.booked * 10) / 10) + ' booked' + end, 'mgap');
     // yearly Art Walk target from January 2027; until then just show the hours done so far
-    if (m.walkTarget) line('<b>Your Art Walk this year:</b> ' + (Math.round(h.walkYear * 10) / 10) + (exempt ? ' hrs' : ' of ' + m.walkTarget + ' hrs'));
+    const walkT = p ? (typeof p.walk === 'number' ? p.walk : 0) : (exempt ? 0 : m.walkTarget);
+    if (m.walkTarget) line('<b>Your Art Walk this year:</b> ' + (Math.round(h.walkYear * 10) / 10) + (walkT ? ' of ' + walkT + ' hrs' : ' hrs'));
     else if (h.walkYear) line('<b>Your Art Walk so far:</b> ' + numH(h.walkYear));
     const plus = [];
     if (h.subbed) plus.push(numH(h.subbed) + ' subbed');
     if (h.events) plus.push(numH(h.events) + ' other events');
     if (plus.length) line('Plus ' + plus.join(' · '));
-    // last week of the month: next month too, so its first days don't get missed
+    // next month too, as people book ahead
     if (m.next) line('<b>' + esc(m.next.label) + ':</b> ' + numH(m.next.gallery).replace(/ hrs?$/, '') + ' gallery hours, which is ' + hoursEach(m.next) +
       ' hours each · ' + (h.nextBooked ? 'you have ' + numH(h.nextBooked) + ' booked' : exempt ? 'you have none booked' : '<strong>you have none booked</strong>'), 'mgap');
   }
   return html;
+}
+
+// The Hours tab: everyone with a gallery minimum, this month's gallery hours (done + booked) against the target.
+// From January 2027 it also shows the year so far and Art Walk this year. People with no gallery minimum are listed underneath.
+function hoursTable() {
+  const m = state.month;
+  if (!m || !m.people) return '<p class="empty">The hours will show here once the rota has loaded.</p>';
+  const r1 = (x) => Math.round(x * 10) / 10;
+  const H = (n) => Object.assign({ done: 0, booked: 0, walkYear: 0, year: 0 }, (m.hours || {})[n] || {});
+  const rows = m.people.filter((p) => p.gallery !== false).map((p) => {
+    const h = H(p.name), total = h.done + h.booked;
+    const lo = typeof p.gallery === 'number' ? p.gallery : m.minimum, hi = typeof p.gallery === 'number' ? p.gallery : (m.minimumHigh || m.minimum);
+    const cls = total < lo ? 'short' : total > hi ? 'over' : 'ok';
+    const st = cls === 'short' ? numH(r1(lo - total)).replace(/ hrs?$/, '') + ' needed' : cls === 'over' ? '✓ +' + r1(total - hi) : '✓';
+    let tds = '<td>' + esc(p.name) + '</td>';
+    if (m.yearly) {
+      const aw = typeof p.walk === 'number' && p.walk ? (h.walkYear >= p.walk ? '<span class="awdone">' + r1(h.walkYear) + ' of ' + p.walk + ' ✓</span>' : r1(h.walkYear) + ' of ' + p.walk) : r1(h.walkYear);
+      tds += '<td class="num">' + r1(total) + '</td><td class="st">' + st + '</td><td class="num yr">' + r1(h.year) + ' of ' + p.year + '</td><td class="num">' + aw + '</td>';
+    } else {
+      tds += '<td class="num">' + r1(h.done) + '</td><td class="num">' + r1(h.booked) + '</td><td class="st">' + st + '</td>';
+    }
+    return '<tr class="' + cls + (p.name === state.me ? ' me' : '') + '">' + tds + '</tr>';
+  }).join('');
+  const head = m.yearly
+    ? '<th>Artist</th><th class="num">Month</th><th></th><th class="num">Year</th><th class="num">Art Walk</th>'
+    : '<th>Artist</th><th class="num">Done</th><th class="num">Booked</th><th>This month</th>';
+  const walkOnly = m.people.filter((p) => p.gallery === false && typeof p.walk === 'number' && p.walk)
+    .map((p) => esc(p.name) + ' · ' + r1(H(p.name).walkYear) + (m.yearly ? ' of ' + p.walk : '') + ' hrs');
+  const none = m.people.filter((p) => p.gallery === false && !(typeof p.walk === 'number' && p.walk)).map((p) => esc(p.name));
+  const foot = [];
+  if (walkOnly.length) foot.push('<b>Art Walk only:</b> ' + walkOnly.join(', '));
+  if (none.length) foot.push('<b>No minimum:</b> ' + none.join(', '));
+  return '<div class="hcard"><p class="mhead">' + esc(m.label) + ' · ' + hoursEach(m) + ' hours each</p>' +
+    '<p class="hsub">' + (m.yearly ? 'Gallery hours done + booked this month, the year so far, and Art Walk this year.'
+      : 'Gallery hours done and booked this month.') + ' Longer blocks and subbing both count.</p>' +
+    '<table class="htable"><thead><tr>' + head + '</tr></thead><tbody>' + rows + '</tbody></table>' +
+    (m.yearly ? '<div class="hnote"><b>Year</b> = gallery hours since 1 January, against each month\'s target so far. <b>Art Walk</b> = hours this year, against about ' + m.walkEach + ' each.</div>'
+      : '<div class="hnote">Art Walk is counted separately: from January, about ' + m.walkEach + ' hours each a year.</div>') +
+    (foot.length ? '<p class="small">' + foot.join(' &nbsp;·&nbsp; ') + '</p>' : '') + '</div>';
 }
 
 /* ---------- drawing the rota ---------- */
@@ -621,6 +686,9 @@ function render() {
     ? '<strong>' + hrs(soonOpen) + ' open</strong> in the next two weeks'
     : allOpen ? 'The next two weeks are covered. <strong>' + hrs(allOpen) + ' open</strong> later on' : 'Every hour is covered';
   $('summary').innerHTML = state.month && !state.admin ? monthLine(openLine) : '<div class="monthline">' + openLine + '.</div>';
+  const hoursTab = state.filter === 'hours';
+  $('summary').hidden = hoursTab; $('howto').hidden = hoursTab;
+  if (hoursTab) { $('list').innerHTML = hoursTable(); updateBar(); return show('mainView'); }
 
   const days = {};
   state.shifts.forEach((s) => { (days[s.date] = days[s.date] || []).push(s); });
